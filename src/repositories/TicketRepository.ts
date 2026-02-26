@@ -1,6 +1,7 @@
 import pool from '../config/database';
 import { Ticket, TicketFilters, TicketStatus, TicketPriority, IncidentType, PaginatedResponse } from '../types';
 import { ITicketRepository } from './ITicketRepository';
+import { TicketNotFoundError } from '../errors/TicketNotFoundError';
 
 export class TicketRepository implements ITicketRepository {
     async findAll(filters: TicketFilters): Promise<PaginatedResponse<Ticket>> {
@@ -141,6 +142,9 @@ export class TicketRepository implements ITicketRepository {
                        status, priority, created_at as "createdAt", processed_at as "processedAt"`,
             [status, ticketId]
         );
+        if (result.rows.length === 0) {
+            throw new TicketNotFoundError();
+        }
         const row = result.rows[0];
         return {
             ...row,
