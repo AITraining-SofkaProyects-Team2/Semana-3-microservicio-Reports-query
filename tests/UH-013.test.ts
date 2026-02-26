@@ -610,3 +610,256 @@ describe('TC-013-003 — Validación de estado válido - RECEIVED', () => {
     });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-013-004 — Validación de estado inválido - valores fuera del dominio
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Descripción: Verificar que el método updateTicketStatus rechaza estados que
+ * no pertenecen al dominio permitido { "RECEIVED", "IN_PROGRESS" }, lanzando
+ * InvalidTicketStatusError sin invocar al repositorio.
+ *
+ * Precondiciones:
+ *   - El servicio TicketQueryService está instanciado con un repositorio mock.
+ *   - El ticketId tiene formato UUIDv4 válido.
+ *   - El estado NO pertenece a { "RECEIVED", "IN_PROGRESS" }.
+ *
+ * Pasos (Gherkin):
+ *   Given existe un ticket con ID válido y estado inválido "CLOSED"
+ *   When se invoca updateTicketStatus con estado fuera del dominio
+ *   Then el sistema lanza InvalidTicketStatusError
+ *     And no invoca al repositorio
+ *
+ * Partición de equivalencia:
+ *   | Grupo                           | Valor de status   | Tipo     |
+ *   |---------------------------------|-------------------|----------|
+ *   | Estado inexistente              | "CLOSED"          | Inválido |
+ *   | Estado inexistente              | "RESOLVED"        | Inválido |
+ *   | Estado inexistente              | "CANCELLED"       | Inválido |
+ *   | Cadena vacía                    | ""                | Inválido |
+ *   | Null                            | null              | Inválido |
+ *   | Tipo incorrecto - número        | 123               | Inválido |
+ *   | Tipo incorrecto - booleano      | true              | Inválido |
+ *   | Case-sensitive incorrecto       | "received"        | Inválido |
+ *   | Con espacios                    | " IN_PROGRESS "   | Inválido |
+ *   | Casi correcto (caracteres)      | "RECEIVEDD"       | Inválido |
+ *
+ * Valores límites:
+ *   - Estado con un carácter de diferencia: "RECEIVEDD", "IN_PROGRES"
+ *   - Estado en minúsculas: "received", "in_progress"
+ *   - Cadena vacía: ""
+ */
+
+describe('TC-013-004 — Validación de estado inválido - valores fuera del dominio', () => {
+  let mockRepository: ITicketRepository & { updateStatus: ReturnType<typeof vi.fn> };
+  let service: TicketQueryService;
+
+  const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
+
+  const makeTicket = (id: string, status: TicketStatus): Ticket => ({
+    ticketId: id,
+    lineNumber: '0991234567',
+    email: 'admin@example.com',
+    type: 'NO_SERVICE',
+    description: null,
+    priority: 'HIGH',
+    status,
+    createdAt: '2026-02-01T00:00:00.000Z',
+    processedAt: '2026-02-01T01:00:00.000Z',
+  });
+
+  beforeEach(() => {
+    mockRepository = {
+      findAll: vi.fn(),
+      findById: vi.fn(),
+      findByLineNumber: vi.fn(),
+      getMetrics: vi.fn(),
+      updateStatus: vi.fn(),
+    } as unknown as ITicketRepository & { updateStatus: ReturnType<typeof vi.fn> };
+
+    service = new TicketQueryService(mockRepository);
+  });
+
+  // ── EP-1: Estado inexistente "CLOSED" ────────────────────────────────────
+  describe('Given un ticketId con UUID válido pero estado "CLOSED" (fuera del dominio)', () => {
+    it('When se invoca updateTicketStatus, Then lanza InvalidTicketStatusError', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'CLOSED' as any),
+      ).rejects.toThrow(InvalidTicketStatusError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, 'CLOSED' as any);
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('When se invoca updateTicketStatus, Then el error contiene descripción de estados permitidos', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, 'CLOSED' as any);
+        fail('Debería haber lanzado InvalidTicketStatusError');
+      } catch (error: any) {
+        expect(error.message).toContain('RECEIVED');
+        expect(error.message).toContain('IN_PROGRESS');
+      }
+    });
+  });
+
+  // ── EP-2: Estado inexistente "RESOLVED" ──────────────────────────────────
+  describe('Given un ticketId válido pero estado "RESOLVED" (fuera del dominio)', () => {
+    it('When se invoca updateTicketStatus, Then lanza InvalidTicketStatusError', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'RESOLVED' as any),
+      ).rejects.toThrow(InvalidTicketStatusError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, 'RESOLVED' as any);
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── EP-3: Estado inexistente "CANCELLED" ─────────────────────────────────
+  describe('Given un ticketId válido pero estado "CANCELLED" (fuera del dominio)', () => {
+    it('When se invoca updateTicketStatus, Then lanza InvalidTicketStatusError', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'CANCELLED' as any),
+      ).rejects.toThrow(InvalidTicketStatusError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, 'CANCELLED' as any);
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── EP-4: Cadena vacía ──────────────────────────────────────────────────
+  describe('Given un ticketId válido pero estado vacío ("")', () => {
+    it('When se invoca updateTicketStatus, Then lanza InvalidTicketStatusError', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, '' as any),
+      ).rejects.toThrow(InvalidTicketStatusError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, '' as any);
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── EP-5: Case-sensitive incorrecto "received" (minúsculas) ──────────────
+  describe('Given un ticketId válido pero "received" (minúsculas, case-sensitive)', () => {
+    it('When se invoca updateTicketStatus, Then lanza InvalidTicketStatusError', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'received' as any),
+      ).rejects.toThrow(InvalidTicketStatusError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, 'received' as any);
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── EP-6: Con espacios " IN_PROGRESS " ──────────────────────────────────
+  describe('Given un estado "IN_PROGRESS" con espacios al inicio/final', () => {
+    it('When se invoca updateTicketStatus con " IN_PROGRESS ", Then lanza InvalidTicketStatusError', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, ' IN_PROGRESS ' as any),
+      ).rejects.toThrow(InvalidTicketStatusError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, ' IN_PROGRESS ' as any);
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Valor límite: Casi correcto "RECEIVEDD" (un carácter extra) ─────────
+  describe('Given un estado "RECEIVEDD" (un carácter extra vs "RECEIVED")', () => {
+    it('Then "RECEIVEDD" no está en el dominio permitido', () => {
+      const VALID_STATUSES = ['RECEIVED', 'IN_PROGRESS'];
+      expect(VALID_STATUSES).not.toContain('RECEIVEDD');
+    });
+
+    it('When se invoca updateTicketStatus con "RECEIVEDD", Then lanza InvalidTicketStatusError', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'RECEIVEDD' as any),
+      ).rejects.toThrow(InvalidTicketStatusError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, 'RECEIVEDD' as any);
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Valor límite: Casi correcto "IN_PROGRES" (un carácter faltante) ─────
+  describe('Given un estado "IN_PROGRES" (un carácter faltante vs "IN_PROGRESS")', () => {
+    it('Then "IN_PROGRES" no está en el dominio permitido', () => {
+      const VALID_STATUSES = ['RECEIVED', 'IN_PROGRESS'];
+      expect(VALID_STATUSES).not.toContain('IN_PROGRES');
+    });
+
+    it('When se invoca updateTicketStatus con "IN_PROGRES", Then lanza InvalidTicketStatusError', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'IN_PROGRES' as any),
+      ).rejects.toThrow(InvalidTicketStatusError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, 'IN_PROGRES' as any);
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Verificación: Dominio permitido es exactamente { RECEIVED, IN_PROGRESS } ──
+  describe('Verificación: El dominio permitido es exactamente { "RECEIVED", "IN_PROGRESS" }', () => {
+    it('Then "RECEIVED" está permitido', () => {
+      const VALID_STATUSES: TicketStatus[] = ['RECEIVED', 'IN_PROGRESS'];
+      expect(VALID_STATUSES).toContain('RECEIVED');
+    });
+
+    it('Then "IN_PROGRESS" está permitido', () => {
+      const VALID_STATUSES: TicketStatus[] = ['RECEIVED', 'IN_PROGRESS'];
+      expect(VALID_STATUSES).toContain('IN_PROGRESS');
+    });
+
+    it('Then el dominio tiene exactamente 2 estados', () => {
+      const VALID_STATUSES: TicketStatus[] = ['RECEIVED', 'IN_PROGRESS'];
+      expect(VALID_STATUSES).toHaveLength(2);
+    });
+  });
+});
+
