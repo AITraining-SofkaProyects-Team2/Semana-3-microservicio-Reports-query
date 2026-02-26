@@ -1,5 +1,5 @@
 import { ITicketRepository } from '../repositories/ITicketRepository';
-import { Ticket, TicketFilters, PaginatedResponse } from '../types';
+import { Ticket, TicketFilters, TicketStatus, PaginatedResponse } from '../types';
 import { TicketNotFoundError } from '../errors/TicketNotFoundError';
 import { InvalidUuidFormatError } from '../errors/InvalidUuidFormatError';
 
@@ -32,6 +32,13 @@ export class TicketQueryService {
       throw new Error(`Invalid lineNumber: must be exactly 10 digits, got "${lineNumber}"`);
     }
     return this.repository.findByLineNumber(lineNumber);
+  }
+
+  async updateTicketStatus(ticketId: string, status: TicketStatus): Promise<Ticket> {
+    if (!UUID_V4_REGEX.test(ticketId)) {
+      throw new InvalidUuidFormatError();
+    }
+    return this.repository.updateStatus(ticketId, status);
   }
 }
 

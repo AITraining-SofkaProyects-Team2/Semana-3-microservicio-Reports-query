@@ -131,5 +131,22 @@ export class TicketRepository implements ITicketRepository {
         );
         return { metrics: result.rows };
     }
+
+    async updateStatus(ticketId: string, status: TicketStatus): Promise<Ticket> {
+        const result = await pool.query(
+            `UPDATE tickets 
+             SET status = $1, processed_at = CURRENT_TIMESTAMP
+             WHERE ticket_id = $2
+             RETURNING ticket_id as "ticketId", line_number as "lineNumber", email, type, description,
+                       status, priority, created_at as "createdAt", processed_at as "processedAt"`,
+            [status, ticketId]
+        );
+        const row = result.rows[0];
+        return {
+            ...row,
+            createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+            processedAt: row.processedAt instanceof Date ? row.processedAt.toISOString() : row.processedAt,
+        };
+    }
 }
 
