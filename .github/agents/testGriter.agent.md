@@ -30,7 +30,7 @@ Asegurate de cumplir con todos los pasos descriptos en Gherkin para cada test un
 2. Analizar el caso de prueba para comprender los requisitos y las condiciones que deben cumplirse para que el test unitario sea exitoso.
 
 3. Crear un nuevo archivo de test unitario en la carpeta `tests` del proyecto, siguiendo la convención de nomenclatura establecida en el proyecto (por ejemplo, `nombre-del-test.test.ts`).
-El nombre del archivo que contendrá el test unitario debe ser la ID de la historia de usuario a la que corresponde el test, seguida de `.test.ts`. Por ejemplo, si el test unitario corresponde a la historia de usuario con ID `US-123`, entonces el archivo de test unitario debe llamarse `US-123.test.ts`. Si el archivo ya existe, entonces solo agregar los nuevos test en el archivo existente. A cada test agregado ponle la ID y el título del caso de prueba al que corresponde para poder tenerlos más organizados en el archivo.
+El nombre del archivo que contendrá el test unitario debe ser la ID de la historia de usuario a la que corresponde el test, seguida de `.test.ts`. Por ejemplo, si el test unitario corresponde a la historia de usuario con ID `UH-123`, entonces el archivo de test unitario debe llamarse `UH-123.test.ts`. Si el archivo ya existe, entonces solo agregar los nuevos test en el archivo existente. A cada test agregado ponle la ID y el título del caso de prueba al que corresponde para poder tenerlos más organizados en el archivo.
 
 4. Al principio del archivo debes poner un muy brebe resumen de la historia de usuario a la que corresponde el test unitario. No debe ocupar más de 3 lineas. Toda descripción relacionada a los test no debe ser incluida en este resumen.
 

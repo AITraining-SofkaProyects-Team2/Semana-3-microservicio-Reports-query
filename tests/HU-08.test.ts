@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import request from 'supertest';
-import app from '../src/index'; // Ajustar el import según la estructura real del Query Service
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TicketQueryService } from '../src/services/TicketQueryService';
+import { ITicketRepository } from '../src/repositories/ITicketRepository';
+import type { Ticket, PaginatedResponse } from '../src/types';
 
 /**
  * TC-035 — Ordenar por fecha ascendente

@@ -9,26 +9,26 @@
 | [REFACTOR] | [TC-005](#TC-005---Lista-vacía-cuando-no-hay-tickets) | HU-01 | Query Service + Frontend | Lista vacía cuando no hay tickets |
 | [REFACTOR] | [TC-006](#TC-006---Solicitar-página-fuera-de-rango) | HU-01 | Query Service + Frontend | Solicitar página fuera de rango |
 | [REFACTOR] | [TC-007](#TC-007---Tamaño-de-página-con-valores-inválidos) | HU-01 | Query Service + Frontend | Tamaño de página con valores inválidos |
-| [GREEN] | [TC-008](#TC-008---Filtrar-por-un-solo-estado-válido) | HU-02 | Query Service + Frontend | Filtrar por un solo estado válido |
-| [GREEN] | [TC-009](#TC-009---Filtrar-por-múltiples-estados-simultáneamente) | HU-02 | Query Service + Frontend | Filtrar por múltiples estados simultáneamente |
-| [GREEN] | [TC-010](#TC-010---Combinar-filtro-de-estado-con-otros-filtros) | HU-02 | Query Service + Frontend | Combinar filtro de estado con otros filtros |
-| [GREEN] | [TC-011](#TC-011---Filtrar-con-estado-inválido) | HU-02 | Query Service + Frontend | Filtrar con estado inválido |
-| [GREEN] | [TC-012](#TC-012---Filtrar-por-estado-sin-resultados-coincidentes) | HU-02 | Query Service + Frontend | Filtrar por estado sin resultados coincidentes |
-| [GREEN] | [TC-013](#TC-013---Filtrar-por-prioridad-válida) | HU-03 | Query Service + Frontend | Filtrar por prioridad válida |
-| [GREEN] | [TC-014](#TC-014---Visualizar-prioridades-disponibles) | HU-03 | Query Service + Frontend | Visualizar prioridades disponibles |
-| [GREEN] | [TC-015](#TC-015---Combinar-filtro-de-prioridad-con-otros-filtros) | HU-03 | Query Service + Frontend | Combinar filtro de prioridad con otros filtros |
-| [GREEN] | [TC-016](#TC-016---Filtrar-con-prioridad-inválida) | HU-03 | Query Service + Frontend | Filtrar con prioridad inválida |
-| [GREEN] | [TC-017](#TC-017---Filtrar-por-prioridad-sin-resultados-coincidentes) | HU-03 | Query Service + Frontend | Filtrar por prioridad sin resultados coincidentes |
-| [GREEN] | [TC-018](#TC-018---Filtrar-por-tipo-de-incidencia-válida) | HU-04 | Query Service + Frontend | Filtrar por tipo de incidente válido |
-| [GREEN] | [TC-019](#TC-019---Listar-todos-los-tipos-de-incidencia-disponibles) | HU-04 | Query Service + Frontend | Listar todos los tipos de incidente disponibles |
-| [GREEN] | [TC-020](#TC-020---Combinar-filtro-de-tipo-con-estado-y-prioridad) | HU-04 | Query Service + Frontend | Combinar filtro de tipo con estado y prioridad |
-| [GREEN] | [TC-021](#TC-021---Filtrar-con-tipo-de-incidencia-inválido) | HU-04 | Query Service + Frontend | Filtrar con tipo de incidente inválido |
-| [GREEN] | [TC-022](#TC-022---Filtrar-por-rango-de-fechas-válido) | HU-05 | Query Service + Frontend | Filtrar por rango de fechas válido |
-| [GREEN] | [TC-023](#TC-023---Validar-que-fecha-fin-sea-mayor-o-igual-a-fecha-inicio) | HU-05 | Query Service + Frontend | Validar que fecha fin sea mayor o igual a fecha inicio |
-| [GREEN] | [TC-024](#TC-024---Rango-de-fechas-sin-resultados-coincidentes) | HU-05 | Query Service + Frontend | Rango de fechas sin resultados coincidentes |
-| [GREEN] | [TC-025](#TC-025---Filtrar-con-solo-fecha-inicio-sin-fecha-fin) | HU-05 | Query Service + Frontend | Filtrar con solo fecha inicio (sin fecha fin) |
-| [GREEN] | [TC-026](#TC-026---Filtrar-con-solo-fecha-fin-sin-fecha-inicio) | HU-05 | Query Service + Frontend | Filtrar con solo fecha fin (sin fecha inicio) |
-| [GREEN] | [TC-027](#TC-027---Fechas-con-formato-inválido) | HU-05 | Query Service + Frontend | Fechas con formato inválido |
+| [REFACTOR] | [TC-008](#TC-008---Filtrar-por-un-solo-estado-válido) | HU-02 | Query Service + Frontend | Filtrar por un solo estado válido |
+| [REFACTOR] | [TC-009](#TC-009---Filtrar-por-múltiples-estados-simultáneamente) | HU-02 | Query Service + Frontend | Filtrar por múltiples estados simultáneamente |
+| [REFACTOR] | [TC-010](#TC-010---Combinar-filtro-de-estado-con-otros-filtros) | HU-02 | Query Service + Frontend | Combinar filtro de estado con otros filtros |
+| [REFACTOR] | [TC-011](#TC-011---Filtrar-con-estado-inválido) | HU-02 | Query Service + Frontend | Filtrar con estado inválido |
+| [REFACTOR] | [TC-012](#TC-012---Filtrar-por-estado-sin-resultados-coincidentes) | HU-02 | Query Service + Frontend | Filtrar por estado sin resultados coincidentes |
+| [REFACTOR] | [TC-013](#TC-013---Filtrar-por-prioridad-válida) | HU-03 | Query Service + Frontend | Filtrar por prioridad válida |
+| [REFACTOR] | [TC-014](#TC-014---Visualizar-prioridades-disponibles) | HU-03 | Query Service + Frontend | Visualizar prioridades disponibles |
+| [REFACTOR] | [TC-015](#TC-015---Combinar-filtro-de-prioridad-con-otros-filtros) | HU-03 | Query Service + Frontend | Combinar filtro de prioridad con otros filtros |
+| [REFACTOR] | [TC-016](#TC-016---Filtrar-con-prioridad-inválida) | HU-03 | Query Service + Frontend | Filtrar con prioridad inválida |
+| [REFACTOR] | [TC-017](#TC-017---Filtrar-por-prioridad-sin-resultados-coincidentes) | HU-03 | Query Service + Frontend | Filtrar por prioridad sin resultados coincidentes |
+| [REFACTOR] | [TC-018](#TC-018---Filtrar-por-tipo-de-incidencia-válida) | HU-04 | Query Service + Frontend | Filtrar por tipo de incidente válido |
+| [REFACTOR] | [TC-019](#TC-019---Listar-todos-los-tipos-de-incidencia-disponibles) | HU-04 | Query Service + Frontend | Listar todos los tipos de incidente disponibles |
+| [REFACTOR] | [TC-020](#TC-020---Combinar-filtro-de-tipo-con-estado-y-prioridad) | HU-04 | Query Service + Frontend | Combinar filtro de tipo con estado y prioridad |
+| [REFACTOR] | [TC-021](#TC-021---Filtrar-con-tipo-de-incidencia-inválido) | HU-04 | Query Service + Frontend | Filtrar con tipo de incidente inválido |
+| [REFACTOR] | [TC-022](#TC-022---Filtrar-por-rango-de-fechas-válido) | HU-05 | Query Service + Frontend | Filtrar por rango de fechas válido |
+| [REFACTOR] | [TC-023](#TC-023---Validar-que-fecha-fin-sea-mayor-o-igual-a-fecha-inicio) | HU-05 | Query Service + Frontend | Validar que fecha fin sea mayor o igual a fecha inicio |
+| [REFACTOR] | [TC-024](#TC-024---Rango-de-fechas-sin-resultados-coincidentes) | HU-05 | Query Service + Frontend | Rango de fechas sin resultados coincidentes |
+| [REFACTOR] | [TC-025](#TC-025---Filtrar-con-solo-fecha-inicio-sin-fecha-fin) | HU-05 | Query Service + Frontend | Filtrar con solo fecha inicio (sin fecha fin) |
+| [REFACTOR] | [TC-026](#TC-026---Filtrar-con-solo-fecha-fin-sin-fecha-inicio) | HU-05 | Query Service + Frontend | Filtrar con solo fecha fin (sin fecha inicio) |
+| [REFACTOR] | [TC-027](#TC-027---Fechas-con-formato-inválido) | HU-05 | Query Service + Frontend | Fechas con formato inválido |
 | [REFACTOR] | [TC-028](#TC-028---Buscar-por-ID-de-ticket-existente) | HU-06 | Query Service + Frontend | Buscar por ID de ticket existente |
 | [REFACTOR] | [TC-029](#TC-029---Buscar-por-ID-de-ticket-inexistente) | HU-06 | Query Service + Frontend | Buscar por ID de ticket inexistente |
 | [REFACTOR] | [TC-030](#TC-030---Buscar-con-ID-en-formato-inválido) | HU-06 | Query Service + Frontend | Buscar con ID en formato inválido |
