@@ -10,6 +10,7 @@ import { ITicketRepository } from '../src/repositories/ITicketRepository';
 import { InvalidUuidFormatError } from '../src/errors/InvalidUuidFormatError';
 import { InvalidTicketStatusError } from '../src/errors/InvalidTicketStatusError';
 import { TicketNotFoundError } from '../src/errors/TicketNotFoundError';
+import { DatabaseError } from '../src/errors/DatabaseError';
 import type { Request } from 'express';
 import type { Ticket, TicketStatus } from '../src/types';
 
@@ -1359,6 +1360,141 @@ describe('TC-013-007 — TicketRepository.updateStatus: manejo de 0 filas en UPD
       const error = await repository.updateStatus(VALID_UUID, 'RECEIVED').catch(e => e);
       expect(error).toBeInstanceOf(TicketNotFoundError);
       expect(error).not.toBeInstanceOf(TypeError);
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-013-008 — Manejo de errores de base de datos
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Descripción: Verificar que TicketRepository envuelve errores de base de datos
+ * (errores crudos de PostgreSQL) en una clase DatabaseError personalizada, evitando
+ * que información sensible como strings de conexión, queries SQL o stack traces
+ * internos de pg se propaguen como errores sin clasificar hacia capas superiores.
+ *
+ * Precondiciones:
+ *   - El pool de base de datos es mockeado con vi.mock
+ *   - pool.query lanza un error nativo de PostgreSQL (Error con código pg)
+ *
+ * Pasos (Gherkin):
+ *   Given pool.query lanza un error de conexión ("ECONNREFUSED")
+ *   When se invoca TicketRepository.updateStatus()
+ *   Then el repositorio lanza DatabaseError (no el error crudo de pg)
+ *     And el error no contiene strings de conexión ni detalles SQL internos
+ *
+ * Partición de equivalencia:
+ *   | Grupo                   | Tipo de error pg        | Resultado Esperado |
+ *   |-------------------------|-------------------------|--------------------|
+ *   | Error de conexión       | ECONNREFUSED            | DatabaseError      |
+ *   | Error de deadlock       | deadlock detected       | DatabaseError      |
+ *   | Error de constraint     | violates constraint     | DatabaseError      |
+ *   | Error de permisos       | permission denied       | DatabaseError      |
+ *   | Sin error               | (sin error)             | Ticket mapeado     |
+ *
+ * Valores límites:
+ *   - Error justo antes de completar la operación (conexión caída)
+ *   - Error con mensaje que contiene la URL de conexión (info sensible)
+ */
+
+describe('TC-013-008 — Manejo de errores de base de datos en TicketRepository', () => {
+  const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
+  const mockQuery = vi.mocked(pool.query);
+  let repository: TicketRepository;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    repository = new TicketRepository();
+  });
+
+  // ── EP-1: Error de conexión → DatabaseError ─────────────────────────────
+  describe('Given pool.query lanza error de conexión (ECONNREFUSED)', () => {
+    beforeEach(() => {
+      const pgError = new Error('connect ECONNREFUSED postgresql://postgres:secret@db:5432/tickets');
+      (pgError as any).code = 'ECONNREFUSED';
+      mockQuery.mockRejectedValue(pgError);
+    });
+
+    it('When se invoca updateStatus, Then lanza DatabaseError (no el error crudo)', async () => {
+      await expect(
+        repository.updateStatus(VALID_UUID, 'IN_PROGRESS'),
+      ).rejects.toThrow(DatabaseError);
+    });
+
+    it('When se invoca updateStatus, Then el error NO expone la URL de conexión', async () => {
+      const error = await repository.updateStatus(VALID_UUID, 'IN_PROGRESS').catch(e => e);
+      expect(error.message).not.toContain('postgresql://');
+      expect(error.message).not.toContain('secret');
+    });
+
+    it('When se invoca updateStatus, Then el error es instancia de DatabaseError', async () => {
+      const error = await repository.updateStatus(VALID_UUID, 'IN_PROGRESS').catch(e => e);
+      expect(error instanceof DatabaseError).toBe(true);
+    });
+  });
+
+  // ── EP-2: Error de deadlock → DatabaseError ─────────────────────────────
+  describe('Given pool.query lanza error de deadlock', () => {
+    beforeEach(() => {
+      const pgError = new Error('deadlock detected on relation "tickets" of database "isp_complaints"');
+      (pgError as any).code = '40P01';
+      mockQuery.mockRejectedValue(pgError);
+    });
+
+    it('When se invoca updateStatus, Then lanza DatabaseError', async () => {
+      await expect(
+        repository.updateStatus(VALID_UUID, 'IN_PROGRESS'),
+      ).rejects.toThrow(DatabaseError);
+    });
+
+    it('When se invoca updateStatus con deadlock, Then el error NO expone el nombre de la BD', async () => {
+      const error = await repository.updateStatus(VALID_UUID, 'IN_PROGRESS').catch(e => e);
+      expect(error.message).not.toContain('isp_complaints');
+    });
+  });
+
+  // ── EP-3: Error de constraint → DatabaseError ───────────────────────────
+  describe('Given pool.query lanza error de constraint (violación de integridad)', () => {
+    beforeEach(() => {
+      const pgError = new Error('violates check constraint "tickets_status_check"');
+      (pgError as any).code = '23514';
+      mockQuery.mockRejectedValue(pgError);
+    });
+
+    it('When se invoca updateStatus, Then lanza DatabaseError', async () => {
+      await expect(
+        repository.updateStatus(VALID_UUID, 'IN_PROGRESS'),
+      ).rejects.toThrow(DatabaseError);
+    });
+  });
+
+  // ── EP-4: Error de permisos → DatabaseError ─────────────────────────────
+  describe('Given pool.query lanza error de permisos', () => {
+    beforeEach(() => {
+      const pgError = new Error('permission denied for table tickets');
+      (pgError as any).code = '42501';
+      mockQuery.mockRejectedValue(pgError);
+    });
+
+    it('When se invoca updateStatus, Then lanza DatabaseError', async () => {
+      await expect(
+        repository.updateStatus(VALID_UUID, 'IN_PROGRESS'),
+      ).rejects.toThrow(DatabaseError);
+    });
+  });
+
+  // ── Valor límite: Error con mensaje que contiene info de conexión ────────
+  describe('Valor límite: Error de pg con URL de conexión completa en el mensaje', () => {
+    it('Then el DatabaseError lanzado NO contiene la URL de conexión en su mensaje', async () => {
+      const sensitiveError = new Error(
+        'connect ECONNREFUSED postgresql://admin:p4ssw0rd@production-db.internal:5432/tickets_prod',
+      );
+      mockQuery.mockRejectedValue(sensitiveError);
+
+      const error = await repository.updateStatus(VALID_UUID, 'IN_PROGRESS').catch(e => e);
+      expect(error instanceof DatabaseError).toBe(true);
+      expect(error.message).not.toContain('p4ssw0rd');
+      expect(error.message).not.toContain('production-db.internal');
     });
   });
 });
