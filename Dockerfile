@@ -13,8 +13,8 @@ COPY tests ./tests
 # Build the application (optional for dev, but good practice)
 RUN npx tsc
 
-# Run unit tests only (integration tests require database)
-RUN npm test -- src/__tests__
+# Run all unit tests (both src/__tests__ and tests/)
+RUN npm test -- src/__tests__ tests
 
 EXPOSE 4000
 
