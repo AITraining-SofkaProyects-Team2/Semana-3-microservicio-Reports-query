@@ -2,18 +2,19 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json ./
+# Copiar entrypoint que instala deps si faltan
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# Copiar package.json e instalar deps (cache de imagen)
+COPY package.json ./
 RUN npm install
 
+# Copiar código fuente
 COPY tsconfig.json vitest.config.ts ./
 COPY src ./src
-COPY tests ./tests
-
-# Build the application (optional for dev, but good practice)
-RUN npx tsc
 
 EXPOSE 4000
 
-# Start the server
+ENTRYPOINT ["entrypoint.sh"]
 CMD ["npm", "run", "dev"]

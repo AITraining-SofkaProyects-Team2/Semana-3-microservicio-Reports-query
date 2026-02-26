@@ -10,6 +10,16 @@ export type TicketPriority = 'HIGH' | 'MEDIUM' | 'LOW' | 'PENDING';
 
 export type TicketStatus = 'RECEIVED' | 'IN_PROGRESS';
 
+/** Constantes de dominio para validación en tiempo de ejecución */
+export const VALID_INCIDENT_TYPES: readonly IncidentType[] = [
+  'NO_SERVICE', 'INTERMITTENT_SERVICE', 'SLOW_CONNECTION',
+  'ROUTER_ISSUE', 'BILLING_QUESTION', 'OTHER',
+] as const;
+
+export const VALID_STATUSES: readonly TicketStatus[] = [
+  'RECEIVED', 'IN_PROGRESS',
+] as const;
+
 export interface Ticket {
   ticketId: string;
   lineNumber: string;
@@ -42,5 +52,7 @@ export interface TicketFilters {
   dateTo?: string;
   page?: number;
   limit?: number;
+  sortBy?: string;
+  sortOrder?: string;
 }
 
