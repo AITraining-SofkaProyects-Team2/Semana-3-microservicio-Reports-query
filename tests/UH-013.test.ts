@@ -4,10 +4,12 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TicketQueryService } from '../src/services/TicketQueryService';
+import { TicketsController } from '../src/controllers/ticketsController';
 import { ITicketRepository } from '../src/repositories/ITicketRepository';
 import { InvalidUuidFormatError } from '../src/errors/InvalidUuidFormatError';
 import { InvalidTicketStatusError } from '../src/errors/InvalidTicketStatusError';
 import { TicketNotFoundError } from '../src/errors/TicketNotFoundError';
+import type { Request } from 'express';
 import type { Ticket, TicketStatus } from '../src/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1037,6 +1039,196 @@ describe('TC-013-005 — Validación: Ticket debe existir antes de actualizar', 
       // La validación de UUID siempre falla primero
       expect(UUID_REGEX.test(INVALID_UUID)).toBe(false);
       expect(TICKET_NOT_FOUND).toBeNull();
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-013-006 — Error 404 - Ticket no encontrado (capa Controlador)
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Descripción: Verificar que el controlador mapea correctamente TicketNotFoundError
+ * a una respuesta HTTP 404, y que los demás errores se mapean al código HTTP adecuado.
+ *
+ * Precondiciones:
+ *   - El controlador TicketsController está instanciado con un servicio mock.
+ *   - El servicio es mockeado para controlar el comportamiento.
+ *   - No existe un ticket con el ID especificado en la base de datos.
+ *
+ * Pasos (Gherkin):
+ *   Given el controlador recibe una request PATCH con ticketId válido
+ *     And el servicio lanza TicketNotFoundError
+ *   When se procesa la request en updateTicketStatus
+ *   Then el controlador responde con HTTP 404
+ *     And el body contiene el mensaje de error
+ *
+ * Partición de equivalencia:
+ *   | Grupo                        | Error del Service           | HTTP Esperado |
+ *   |------------------------------|-----------------------------|---------------|
+ *   | Ticket no encontrado         | TicketNotFoundError         | 404           |
+ *   | UUID inválido                | InvalidUuidFormatError      | 400           |
+ *   | Estado inválido              | InvalidTicketStatusError    | 400           |
+ *   | Actualización exitosa        | (sin error)                 | 200           |
+ *   | Error inesperado de BD       | Error genérico              | 500           |
+ *
+ * Valores límites:
+ *   - UUID válido pero ticket recién eliminado (no encontrado)
+ *   - Primer ticket creado del sistema
+ */
+
+describe('TC-013-006 — Error 404: Controlador mapea TicketNotFoundError a HTTP 404', () => {
+  let mockService: { updateTicketStatus: ReturnType<typeof vi.fn> };
+  let controller: TicketsController;
+
+  const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
+
+  const makeReq = (ticketId: string, status: string): Partial<Request> => ({
+    params: { ticketId },
+    body: { status },
+  });
+
+  const makeRes = (): { status: ReturnType<typeof vi.fn>; json: ReturnType<typeof vi.fn> } => {
+    const res = {
+      status: vi.fn(),
+      json: vi.fn(),
+    };
+    res.status.mockReturnValue(res);
+    return res;
+  };
+
+  beforeEach(() => {
+    mockService = {
+      updateTicketStatus: vi.fn(),
+    };
+    controller = new TicketsController(mockService as any);
+  });
+
+  // ── EP-1: Ticket no encontrado → HTTP 404 ───────────────────────────────
+  describe('Given el servicio lanza TicketNotFoundError (ticket no existe en BD)', () => {
+    beforeEach(() => {
+      mockService.updateTicketStatus.mockRejectedValue(new TicketNotFoundError());
+    });
+
+    it('When se llama updateTicketStatus en el controlador, Then responde con HTTP 404', async () => {
+      const req = makeReq(VALID_UUID, 'IN_PROGRESS');
+      const res = makeRes();
+
+      await controller.updateTicketStatus(req as any, res as any);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('When el controlador recibe TicketNotFoundError, Then el body contiene mensaje de error', async () => {
+      const req = makeReq(VALID_UUID, 'IN_PROGRESS');
+      const res = makeRes();
+
+      await controller.updateTicketStatus(req as any, res as any);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.any(String) }),
+      );
+    });
+  });
+
+  // ── EP-2: UUID inválido → HTTP 400 ─────────────────────────────────────
+  describe('Given el servicio lanza InvalidUuidFormatError (UUID inválido)', () => {
+    beforeEach(() => {
+      mockService.updateTicketStatus.mockRejectedValue(new InvalidUuidFormatError());
+    });
+
+    it('When se llama updateTicketStatus en el controlador, Then responde con HTTP 400', async () => {
+      const req = makeReq('invalid-uuid', 'IN_PROGRESS');
+      const res = makeRes();
+
+      await controller.updateTicketStatus(req as any, res as any);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
+  // ── EP-3: Estado inválido → HTTP 400 ───────────────────────────────────
+  describe('Given el servicio lanza InvalidTicketStatusError (estado fuera del dominio)', () => {
+    beforeEach(() => {
+      mockService.updateTicketStatus.mockRejectedValue(new InvalidTicketStatusError('CLOSED'));
+    });
+
+    it('When se llama updateTicketStatus en el controlador, Then responde con HTTP 400', async () => {
+      const req = makeReq(VALID_UUID, 'CLOSED');
+      const res = makeRes();
+
+      await controller.updateTicketStatus(req as any, res as any);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
+  // ── EP-4: Actualización exitosa → HTTP 200 ─────────────────────────────
+  describe('Given el servicio resuelve exitosamente el ticket actualizado', () => {
+    const UPDATED_TICKET = {
+      ticketId: VALID_UUID,
+      lineNumber: '0991234567',
+      email: 'admin@example.com',
+      type: 'NO_SERVICE',
+      description: null,
+      priority: 'HIGH',
+      status: 'IN_PROGRESS',
+      createdAt: '2026-02-25T09:00:00.000Z',
+      processedAt: '2026-02-26T10:00:00.000Z',
+    };
+
+    beforeEach(() => {
+      mockService.updateTicketStatus.mockResolvedValue(UPDATED_TICKET);
+    });
+
+    it('When se llama updateTicketStatus en el controlador, Then responde con HTTP 200', async () => {
+      const req = makeReq(VALID_UUID, 'IN_PROGRESS');
+      const res = makeRes();
+
+      await controller.updateTicketStatus(req as any, res as any);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('When responde HTTP 200, Then el body contiene el ticket actualizado', async () => {
+      const req = makeReq(VALID_UUID, 'IN_PROGRESS');
+      const res = makeRes();
+
+      await controller.updateTicketStatus(req as any, res as any);
+
+      expect(res.json).toHaveBeenCalledWith(UPDATED_TICKET);
+    });
+  });
+
+  // ── EP-5: Error inesperado de BD → HTTP 500 ────────────────────────────
+  describe('Given el servicio lanza un error inesperado (falla de BD)', () => {
+    beforeEach(() => {
+      mockService.updateTicketStatus.mockRejectedValue(new Error('Connection refused'));
+    });
+
+    it('When se llama updateTicketStatus en el controlador, Then responde con HTTP 500', async () => {
+      const req = makeReq(VALID_UUID, 'IN_PROGRESS');
+      const res = makeRes();
+
+      await controller.updateTicketStatus(req as any, res as any);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  // ── Valor límite: UUID válido pero ticket recién eliminado ───────────────
+  describe('Valor límite: UUID válido de ticket recién eliminado', () => {
+    beforeEach(() => {
+      mockService.updateTicketStatus.mockRejectedValue(new TicketNotFoundError());
+    });
+
+    it('Then el controlador no asume que un UUID válido implica ticket existente', async () => {
+      const req = makeReq(VALID_UUID, 'IN_PROGRESS');
+      const res = makeRes();
+
+      await controller.updateTicketStatus(req as any, res as any);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.status).not.toHaveBeenCalledWith(200);
     });
   });
 });
