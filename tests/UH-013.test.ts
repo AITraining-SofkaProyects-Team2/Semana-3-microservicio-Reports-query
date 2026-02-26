@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TicketQueryService } from '../src/services/TicketQueryService';
 import { ITicketRepository } from '../src/repositories/ITicketRepository';
+import { InvalidUuidFormatError } from '../src/errors/InvalidUuidFormatError';
 import type { Ticket, TicketStatus } from '../src/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
