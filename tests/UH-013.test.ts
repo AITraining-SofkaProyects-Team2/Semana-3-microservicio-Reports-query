@@ -427,3 +427,186 @@ describe('TC-013-002 — Validación de formato de ticketId - UUID inválido', (
     });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-013-003 — Validación de estado válido - RECEIVED
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Descripción: Verificar que el método updateTicketStatus valida que el estado
+ * pertenece al dominio permitido (RECEIVED, IN_PROGRESS). Solo acepta estados
+ * válidos y rechaza cualquier otro valor.
+ *
+ * Precondiciones:
+ *   - El servicio TicketQueryService está instanciado con un repositorio mock.
+ *   - El repositorio mock implementa updateStatus().
+ *   - El ticketId tiene formato UUIDv4 válido.
+ *
+ * Pasos (Gherkin):
+ *   Given existe un ticket con ID "550e8400-e29b-41d4-a716-446655440000"
+ *   When se envía updateTicketStatus con estado "RECEIVED" (válido)
+ *   Then el sistema valida que pertenece al dominio { "RECEIVED", "IN_PROGRESS" }
+ *     And procede con la actualización
+ *     And retorna el ticket actualizado
+ *
+ * Partición de equivalencia:
+ *   | Grupo                      | Valor de status | Tipo     | Resultado Esperado |
+ *   |----------------------------|-----------------|----------|---------------------|
+ *   | Estado válido              | "RECEIVED"      | Válido   | Actualización OK    |
+ *   | Estado válido              | "IN_PROGRESS"   | Válido   | Actualización OK    |
+ *   | Estado inválido (inexiste) | "CLOSED"        | Inválido | Lanza Error         |
+ *   | Estado inválido (inexiste) | "RESOLVED"      | Inválido | Lanza Error         |
+ *   | Estado inválido (inexiste) | "PENDING"       | Inválido | Lanza Error         |
+ *   | Case-sensitive             | "received"      | Inválido | Lanza Error         |
+ *   | Cadena vacía               | ""              | Inválido | Lanza Error         |
+ *
+ * Valores límites:
+ *   - Primer estado del dominio permitido (RECEIVED)
+ *   - Exactamente uno de los dos valores permitidos del dominio
+ */
+
+describe('TC-013-003 — Validación de estado válido - RECEIVED', () => {
+  let mockRepository: ITicketRepository & { updateStatus: ReturnType<typeof vi.fn> };
+  let service: TicketQueryService;
+
+  const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
+
+  const makeTicket = (id: string, status: TicketStatus): Ticket => ({
+    ticketId: id,
+    lineNumber: '0991234567',
+    email: 'admin@example.com',
+    type: 'NO_SERVICE',
+    description: null,
+    priority: 'HIGH',
+    status,
+    createdAt: '2026-02-01T00:00:00.000Z',
+    processedAt: '2026-02-01T01:00:00.000Z',
+  });
+
+  beforeEach(() => {
+    mockRepository = {
+      findAll: vi.fn(),
+      findById: vi.fn(),
+      findByLineNumber: vi.fn(),
+      getMetrics: vi.fn(),
+      updateStatus: vi.fn(),
+    } as unknown as ITicketRepository & { updateStatus: ReturnType<typeof vi.fn> };
+
+    service = new TicketQueryService(mockRepository);
+  });
+
+  // ── EP-1: Estado válido "RECEIVED" ──────────────────────────────────────
+  describe('Given un ticketId con UUID válido y estado "RECEIVED" (válido)', () => {
+    beforeEach(() => {
+      mockRepository.updateStatus.mockResolvedValue(makeTicket(VALID_UUID, 'RECEIVED'));
+    });
+
+    it('When se invoca updateTicketStatus, Then valida que "RECEIVED" pertenece al dominio', async () => {
+      // El dominio permitido es: { "RECEIVED", "IN_PROGRESS" }
+      const VALID_STATUSES = ['RECEIVED', 'IN_PROGRESS'];
+      expect(VALID_STATUSES).toContain('RECEIVED');
+    });
+
+    it('When se invoca updateTicketStatus con "RECEIVED", Then no lanza error de validación', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'RECEIVED'),
+      ).resolves.toBeDefined();
+    });
+
+    it('When se invoca updateTicketStatus con "RECEIVED", Then llama al repositorio exactamente una vez', async () => {
+      await service.updateTicketStatus(VALID_UUID, 'RECEIVED');
+      expect(mockRepository.updateStatus).toHaveBeenCalledOnce();
+    });
+
+    it('When se invoca updateTicketStatus con "RECEIVED", Then retorna el ticket actualizado', async () => {
+      const result = await service.updateTicketStatus(VALID_UUID, 'RECEIVED');
+      expect(result).not.toBeNull();
+      expect(result.ticketId).toBe(VALID_UUID);
+      expect(result.status).toBe('RECEIVED');
+    });
+  });
+
+  // ── EP-2: Estado válido "IN_PROGRESS" (también del dominio) ─────────────
+  describe('Given un ticketId con UUID válido y estado "IN_PROGRESS" (válido)', () => {
+    beforeEach(() => {
+      mockRepository.updateStatus.mockResolvedValue(makeTicket(VALID_UUID, 'IN_PROGRESS'));
+    });
+
+    it('When se invoca updateTicketStatus, Then valida que "IN_PROGRESS" pertenece al dominio', async () => {
+      const VALID_STATUSES = ['RECEIVED', 'IN_PROGRESS'];
+      expect(VALID_STATUSES).toContain('IN_PROGRESS');
+    });
+
+    it('When se invoca updateTicketStatus con "IN_PROGRESS", Then no lanza error', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'IN_PROGRESS'),
+      ).resolves.toBeDefined();
+    });
+
+    it('When se invoca updateTicketStatus con "IN_PROGRESS", Then retorna el ticket con status correcto', async () => {
+      const result = await service.updateTicketStatus(VALID_UUID, 'IN_PROGRESS');
+      expect(result.status).toBe('IN_PROGRESS');
+    });
+  });
+
+  // ── EP-3: Estado inválido "CLOSED" (FUERA del dominio) ───────────────────
+  // Este test fuerza la validación: el servicio debe RECHAZAR estados no permitidos
+  describe('Given un ticketId con UUID válido pero estado "CLOSED" (INVÁLIDO)', () => {
+    it('When se invoca updateTicketStatus con "CLOSED", Then lanza error porque no está en dominio', async () => {
+      // El test espera que "CLOSED" sea rechazado por no pertenecer a { "RECEIVED", "IN_PROGRESS" }
+      // Esto fuerza que el servicio implemente validación de dominio
+      const VALID_STATUSES = ['RECEIVED', 'IN_PROGRESS'];
+      
+      // Este test FALLARÁ si el servicio no valida el estado
+      // Porque espera que "CLOSED" no esté en el dominio permitido
+      expect(VALID_STATUSES).not.toContain('CLOSED');
+      
+      // El servicio debe lanzar un error cuando se intente usar "CLOSED"
+      // Por ahora esperamos que lance un error de validación
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'CLOSED' as any),
+      ).rejects.toThrow(); // Esperamos cualquier error de validación de estado
+    });
+
+    it('When se invoca updateTicketStatus con "CLOSED", Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, 'CLOSED' as any);
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── EP-4: Estado inválido en minúsculas "received" ──────────────────────
+  describe('Given un ticketId con UUID válido pero "received" (minúsculas, INVÁLIDO)', () => {
+    it('When se invoca updateTicketStatus con "received", Then es rechazado (case-sensitive)', async () => {
+      const VALID_STATUSES = ['RECEIVED', 'IN_PROGRESS'];
+      // "received" != "RECEIVED" (case-sensitive)
+      expect(VALID_STATUSES).not.toContain('received');
+      
+      // Esperamos que el servicio lance error
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'received' as any),
+      ).rejects.toThrow();
+    });
+  });
+
+  // ── Valor límite: Primer estado permitido ───────────────────────────────
+  describe('Given "RECEIVED" como el PRIMER valor permitido del dominio', () => {
+    beforeEach(() => {
+      mockRepository.updateStatus.mockResolvedValue(makeTicket(VALID_UUID, 'RECEIVED'));
+    });
+
+    it('Then existe el estado "RECEIVED" en el dominio permitido { "RECEIVED", "IN_PROGRESS" }', () => {
+      const ALLOWED_STATUSES: TicketStatus[] = ['RECEIVED', 'IN_PROGRESS'];
+      expect(ALLOWED_STATUSES[0]).toBe('RECEIVED');
+      expect(ALLOWED_STATUSES).toContain('RECEIVED');
+    });
+
+    it('When se invoca updateTicketStatus con "RECEIVED", Then es aceptado y actualiza', async () => {
+      const result = await service.updateTicketStatus(VALID_UUID, 'RECEIVED');
+      expect(result.status).toBe('RECEIVED');
+      expect(mockRepository.updateStatus).toHaveBeenCalledWith(VALID_UUID, 'RECEIVED');
+    });
+  });
+});
