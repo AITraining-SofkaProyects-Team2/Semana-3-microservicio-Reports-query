@@ -39,6 +39,13 @@ export class TicketQueryService {
     if (!UUID_V4_REGEX.test(ticketId)) {
       throw new InvalidUuidFormatError();
     }
+    
+    // Validar que el ticket existe antes de actualizar
+    const ticket = await this.repository.findById(ticketId);
+    if (ticket === null) {
+      throw new TicketNotFoundError();
+    }
+    
     const VALID_STATUSES: TicketStatus[] = ['RECEIVED', 'IN_PROGRESS'];
     if (!VALID_STATUSES.includes(status)) {
       throw new InvalidTicketStatusError(status);

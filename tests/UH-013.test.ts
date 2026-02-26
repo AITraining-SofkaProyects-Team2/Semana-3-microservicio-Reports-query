@@ -7,6 +7,7 @@ import { TicketQueryService } from '../src/services/TicketQueryService';
 import { ITicketRepository } from '../src/repositories/ITicketRepository';
 import { InvalidUuidFormatError } from '../src/errors/InvalidUuidFormatError';
 import { InvalidTicketStatusError } from '../src/errors/InvalidTicketStatusError';
+import { TicketNotFoundError } from '../src/errors/TicketNotFoundError';
 import type { Ticket, TicketStatus } from '../src/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
