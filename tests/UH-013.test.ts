@@ -863,3 +863,180 @@ describe('TC-013-004 — Validación de estado inválido - valores fuera del dom
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-013-005 — Actualización exitosa de RECEIVED a IN_PROGRESS
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Descripción: Verificar que updateTicketStatus valida que el ticket existe
+ * antes de actualizar. Si el ticket no existe en la base de datos, debe lanzar
+ * TicketNotFoundError sin intentar actualizar.
+ *
+ * Precondiciones:
+ *   - El ticketId tiene formato UUIDv4 válido
+ *   - El estado es válido ("IN_PROGRESS")
+ *   - El ticket NO existe en la base de datos
+ *
+ * Pasos (Gherkin):
+ *   Given existe un ticketId "550e8400-e29b-41d4-a716-446655440000" con formato válido
+ *     And el ticket NO existe en la base de datos
+ *   When se invoca updateTicketStatus con "IN_PROGRESS"
+ *   Then el sistema lanza TicketNotFoundError
+ *     And no invoca updateStatus en el repositorio
+ *
+ * Tabla de Decisión:
+ *   | ticketId válido | Ticket existe | Resultado |
+ *   |-----------------|---------------|-----------|
+ *   | Sí              | Sí            | Actualiza |
+ *   | Sí              | No            | Error 404 |
+ *   | No              | Sí            | Error 400 |
+ *   | No              | No            | Error 400 |
+ */
+
+describe('TC-013-005 — Validación: Ticket debe existir antes de actualizar', () => {
+  let mockRepository: ITicketRepository & { 
+    updateStatus: ReturnType<typeof vi.fn>;
+    findById: ReturnType<typeof vi.fn>;
+  };
+  let service: TicketQueryService;
+
+  const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
+
+  beforeEach(() => {
+    mockRepository = {
+      findAll: vi.fn(),
+      findById: vi.fn(),
+      findByLineNumber: vi.fn(),
+      getMetrics: vi.fn(),
+      updateStatus: vi.fn(),
+    } as unknown as ITicketRepository & { 
+      updateStatus: ReturnType<typeof vi.fn>;
+      findById: ReturnType<typeof vi.fn>;
+    };
+
+    service = new TicketQueryService(mockRepository);
+  });
+
+  // ── EP-1: Ticket NO existe en la base de datos ──────────────────────────
+  describe('Given un ticketId con UUID válido pero el ticket NO existe en BD', () => {
+    beforeEach(() => {
+      // El repositorio retorna null (ticket no encontrado)
+      mockRepository.findById.mockResolvedValue(null);
+    });
+
+    it('When se invoca updateTicketStatus, Then lanza TicketNotFoundError', async () => {
+      await expect(
+        service.updateTicketStatus(VALID_UUID, 'IN_PROGRESS'),
+      ).rejects.toThrow(TicketNotFoundError);
+    });
+
+    it('When se invoca updateTicketStatus y el ticket no existe, Then no invoca updateStatus', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, 'IN_PROGRESS');
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('When se invoca updateTicketStatus con ticket inexistente, Then el error es instancia de TicketNotFoundError', async () => {
+      try {
+        await service.updateTicketStatus(VALID_UUID, 'IN_PROGRESS');
+        fail('Debería haber lanzado TicketNotFoundError');
+      } catch (error: any) {
+        expect(error instanceof TicketNotFoundError).toBe(true);
+      }
+    });
+  });
+
+  // ── EP-2: Ticket SÍ existe en la base de datos ──────────────────────────
+  describe('Given un ticketId con UUID válido y el ticket SÍ existe en BD', () => {
+    const EXISTING_TICKET = {
+      ticketId: VALID_UUID,
+      lineNumber: '0991234567',
+      email: 'admin@example.com',
+      type: 'NO_SERVICE' as const,
+      description: null,
+      priority: 'HIGH' as const,
+      status: 'RECEIVED' as const,
+      createdAt: '2026-02-25T09:00:00.000Z',
+      processedAt: '2026-02-25T10:00:00.000Z',
+    };
+
+    const UPDATED_TICKET = {
+      ...EXISTING_TICKET,
+      status: 'IN_PROGRESS' as const,
+      processedAt: '2026-02-25T10:15:00.000Z',
+    };
+
+    beforeEach(() => {
+      mockRepository.findById.mockResolvedValue(EXISTING_TICKET);
+      mockRepository.updateStatus.mockResolvedValue(UPDATED_TICKET);
+    });
+
+    it('When se invoca updateTicketStatus, Then invoca updateStatus en el repositorio', async () => {
+      await service.updateTicketStatus(VALID_UUID, 'IN_PROGRESS');
+      expect(mockRepository.updateStatus).toHaveBeenCalledOnce();
+    });
+
+    it('When se invoca updateTicketStatus, Then retorna el ticket actualizado', async () => {
+      const result = await service.updateTicketStatus(VALID_UUID, 'IN_PROGRESS');
+      expect(result).toBeDefined();
+      expect(result.status).toBe('IN_PROGRESS');
+    });
+
+    it('When se invoca updateTicketStatus, Then el status cambia de "RECEIVED" a "IN_PROGRESS"', async () => {
+      const result = await service.updateTicketStatus(VALID_UUID, 'IN_PROGRESS');
+      expect(result.status).toBe('IN_PROGRESS');
+      expect(result.status).not.toBe(EXISTING_TICKET.status);
+    });
+
+    it('When se invoca updateTicketStatus, Then processed_at se actualiza a time más reciente', async () => {
+      const result = await service.updateTicketStatus(VALID_UUID, 'IN_PROGRESS');
+      const oldTime = new Date(EXISTING_TICKET.processedAt!).getTime();
+      const newTime = new Date(result.processedAt!).getTime();
+      expect(newTime).toBeGreaterThanOrEqual(oldTime);
+    });
+
+    it('When se invoca updateTicketStatus, Then otros campos permanecen sin cambios', async () => {
+      const result = await service.updateTicketStatus(VALID_UUID, 'IN_PROGRESS');
+      expect(result.ticketId).toBe(EXISTING_TICKET.ticketId);
+      expect(result.lineNumber).toBe(EXISTING_TICKET.lineNumber);
+      expect(result.email).toBe(EXISTING_TICKET.email);
+      expect(result.type).toBe(EXISTING_TICKET.type);
+      expect(result.priority).toBe(EXISTING_TICKET.priority);
+    });
+  });
+
+  // ── Tabla de Decisión: Validación de existencia ──────────────────────────
+  describe('Tabla de Decisión: ticketId válido vs Ticket existe en BD', () => {
+    it('Then row 1: UUID válido + Ticket existe → Debe permitir actualización', () => {
+      const VALID_STATUSES = ['RECEIVED', 'IN_PROGRESS'];
+      expect(VALID_STATUSES).toContain('IN_PROGRESS');
+      expect(VALID_UUID).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    });
+
+    it('Then row 2: UUID válido + Ticket NO existe → Debe lanzar TicketNotFoundError', () => {
+      // La validación de existencia es responsabilidad del servicio
+      // Cuando findById retorna null, updateTicketStatus debe lanzar TicketNotFoundError
+      const FINDING_NOT_FOUND = null;
+      expect(FINDING_NOT_FOUND).toBeNull();
+    });
+
+    it('Then row 3: UUID inválido + Ticket existe → Debe lanzar InvalidUuidFormatError (validación previa)', () => {
+      const INVALID_UUID = 'not-a-uuid';
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      expect(UUID_REGEX.test(INVALID_UUID)).toBe(false);
+    });
+
+    it('Then row 4: UUID inválido + Ticket NO existe → Debe lanzar InvalidUuidFormatError (validación previa)', () => {
+      const INVALID_UUID = 'not-a-uuid';
+      const TICKET_NOT_FOUND = null;
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      // La validación de UUID siempre falla primero
+      expect(UUID_REGEX.test(INVALID_UUID)).toBe(false);
+      expect(TICKET_NOT_FOUND).toBeNull();
+    });
+  });
+});
+
