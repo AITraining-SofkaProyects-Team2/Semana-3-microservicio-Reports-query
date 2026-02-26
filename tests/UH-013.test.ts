@@ -197,3 +197,232 @@ describe('TC-013-001 — Validación de formato de ticketId - UUID válido', () 
     });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-013-002 — Validación de formato de ticketId - UUID inválido
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Descripción: Verificar que el método updateTicketStatus rechaza ticketIds con
+ * formato inválido lanzando InvalidUuidFormatError sin invocar al repositorio.
+ *
+ * Precondiciones:
+ *   - El servicio TicketQueryService está instanciado con un repositorio mock.
+ *   - El repositorio mock NO debe ser invocado para IDs con formato inválido.
+ *
+ * Pasos (Gherkin):
+ *   Given el endpoint PATCH /api/tickets/:ticketId/status está disponible
+ *   When se invoca updateTicketStatus con ticketId en formato inválido
+ *   Then el sistema lanza InvalidUuidFormatError
+ *     And no invoca el repositorio
+ *
+ * Partición de equivalencia:
+ *   | Grupo                      | Valor de ticketId                              | Tipo     |
+ *   |----------------------------|------------------------------------------------|----------|
+ *   | Formato incorrecto         | "invalid-uuid"                                 | Inválido |
+ *   | Muy corto                  | "abc"                                          | Inválido |
+ *   | Muy largo                  | "550e8400-e29b-41d4-a716-446655440000-extra"  | Inválido |
+ *   | Sin guiones                | "550e8400e29b41d4a716446655440000"            | Inválido |
+ *   | Con caracteres especiales   | "550e8400-e29b-41d4-a716-44665544000@"        | Inválido |
+ *
+ * Valores límites:
+ *   - 35 caracteres (uno menos del mínimo)
+ *   - 37 caracteres (uno más del máximo)
+ *   - Cadena vacía: ""
+ */
+
+describe('TC-013-002 — Validación de formato de ticketId - UUID inválido', () => {
+  let mockRepository: ITicketRepository & { updateStatus: ReturnType<typeof vi.fn> };
+  let service: TicketQueryService;
+
+  const makeTicket = (id: string, status: TicketStatus): Ticket => ({
+    ticketId: id,
+    lineNumber: '0991234567',
+    email: 'admin@example.com',
+    type: 'NO_SERVICE',
+    description: null,
+    priority: 'HIGH',
+    status,
+    createdAt: '2026-02-01T00:00:00.000Z',
+    processedAt: '2026-02-01T01:00:00.000Z',
+  });
+
+  beforeEach(() => {
+    mockRepository = {
+      findAll: vi.fn(),
+      findById: vi.fn(),
+      findByLineNumber: vi.fn(),
+      getMetrics: vi.fn(),
+      updateStatus: vi.fn(),
+    } as unknown as ITicketRepository & { updateStatus: ReturnType<typeof vi.fn> };
+
+    service = new TicketQueryService(mockRepository);
+  });
+
+  // ── EP-1: Formato incorrecto ────────────────────────────────────────────
+  describe('Given un ticketId con formato completamente incorrecto "invalid-uuid"', () => {
+    const INVALID_UUID = 'invalid-uuid';
+
+    it('When se invoca updateTicketStatus, Then lanza InvalidUuidFormatError', async () => {
+      await expect(
+        service.updateTicketStatus(INVALID_UUID, 'IN_PROGRESS'),
+      ).rejects.toThrow(InvalidUuidFormatError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(INVALID_UUID, 'IN_PROGRESS');
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── EP-2: Muy corto ────────────────────────────────────────────────────
+  describe('Given un ticketId muy corto "abc"', () => {
+    const SHORT_UUID = 'abc';
+
+    it('When se invoca updateTicketStatus, Then lanza InvalidUuidFormatError', async () => {
+      await expect(
+        service.updateTicketStatus(SHORT_UUID, 'IN_PROGRESS'),
+      ).rejects.toThrow(InvalidUuidFormatError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(SHORT_UUID, 'IN_PROGRESS');
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── EP-3: Muy largo ────────────────────────────────────────────────────
+  describe('Given un ticketId muy largo con caracteres extra', () => {
+    const LONG_UUID = '550e8400-e29b-41d4-a716-446655440000-extra';
+
+    it('When se invoca updateTicketStatus, Then lanza InvalidUuidFormatError', async () => {
+      await expect(
+        service.updateTicketStatus(LONG_UUID, 'RECEIVED'),
+      ).rejects.toThrow(InvalidUuidFormatError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(LONG_UUID, 'RECEIVED');
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── EP-4: Sin guiones ────────────────────────────────────────────────
+  describe('Given un UUID sin guiones (32 caracteres consecutivos)', () => {
+    const NO_HYPHENS = '550e8400e29b41d4a716446655440000';
+
+    it('When se invoca updateTicketStatus, Then lanza InvalidUuidFormatError', async () => {
+      await expect(
+        service.updateTicketStatus(NO_HYPHENS, 'IN_PROGRESS'),
+      ).rejects.toThrow(InvalidUuidFormatError);
+    });
+
+    it('When se invoca updateTicketStatus, Then el repositorio no es invocado', async () => {
+      try {
+        await service.updateTicketStatus(NO_HYPHENS, 'IN_PROGRESS');
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── EP-5: Con caracteres especiales ─────────────────────────────────
+  describe('Given un UUID con caracteres especiales "@"', () => {
+    const SPECIAL_CHARS = '550e8400-e29b-41d4-a716-44665544000@';
+
+    it('When se invoca updateTicketStatus, Then lanza InvalidUuidFormatError', async () => {
+      await expect(
+        service.updateTicketStatus(SPECIAL_CHARS, 'RECEIVED'),
+      ).rejects.toThrow(InvalidUuidFormatError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(SPECIAL_CHARS, 'RECEIVED');
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Valor límite: 35 caracteres (uno menos del mínimo) ────────────────
+  describe('Given un string con 35 caracteres (UUIDv4 incompleto)', () => {
+    const UUID_35_CHARS = '550e8400-e29b-41d4-a716-44665544000';
+
+    it('Then el string tiene exactamente 35 caracteres', () => {
+      expect(UUID_35_CHARS).toHaveLength(35);
+    });
+
+    it('When se invoca updateTicketStatus, Then lanza InvalidUuidFormatError', async () => {
+      await expect(
+        service.updateTicketStatus(UUID_35_CHARS, 'IN_PROGRESS'),
+      ).rejects.toThrow(InvalidUuidFormatError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(UUID_35_CHARS, 'IN_PROGRESS');
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Valor límite: 37 caracteres (uno más del máximo) ──────────────────
+  describe('Given un UUID con 37 caracteres (UUIDv4 con un carácter extra)', () => {
+    const UUID_37_CHARS = '550e8400-e29b-41d4-a716-446655440000a';
+
+    it('Then el string tiene exactamente 37 caracteres', () => {
+      expect(UUID_37_CHARS).toHaveLength(37);
+    });
+
+    it('When se invoca updateTicketStatus, Then lanza InvalidUuidFormatError', async () => {
+      await expect(
+        service.updateTicketStatus(UUID_37_CHARS, 'RECEIVED'),
+      ).rejects.toThrow(InvalidUuidFormatError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(UUID_37_CHARS, 'RECEIVED');
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Valor límite: Cadena vacía ──────────────────────────────────────
+  describe('Given un ticketId vacío ("")', () => {
+    const EMPTY_STRING = '';
+
+    it('When se invoca updateTicketStatus, Then lanza InvalidUuidFormatError', async () => {
+      await expect(
+        service.updateTicketStatus(EMPTY_STRING, 'IN_PROGRESS'),
+      ).rejects.toThrow(InvalidUuidFormatError);
+    });
+
+    it('When se invoca updateTicketStatus, Then no invoca al repositorio', async () => {
+      try {
+        await service.updateTicketStatus(EMPTY_STRING, 'IN_PROGRESS');
+      } catch {
+        // Error esperado
+      }
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+});
