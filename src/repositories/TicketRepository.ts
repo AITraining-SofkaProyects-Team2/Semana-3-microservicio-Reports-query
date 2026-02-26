@@ -2,6 +2,7 @@ import pool from '../config/database';
 import { Ticket, TicketFilters, TicketStatus, TicketPriority, IncidentType, PaginatedResponse } from '../types';
 import { ITicketRepository } from './ITicketRepository';
 import { TicketNotFoundError } from '../errors/TicketNotFoundError';
+import { DatabaseError } from '../errors/DatabaseError';
 
 export class TicketRepository implements ITicketRepository {
     async findAll(filters: TicketFilters): Promise<PaginatedResponse<Ticket>> {
@@ -134,23 +135,30 @@ export class TicketRepository implements ITicketRepository {
     }
 
     async updateStatus(ticketId: string, status: TicketStatus): Promise<Ticket> {
-        const result = await pool.query(
-            `UPDATE tickets 
-             SET status = $1, processed_at = CURRENT_TIMESTAMP
-             WHERE ticket_id = $2
-             RETURNING ticket_id as "ticketId", line_number as "lineNumber", email, type, description,
-                       status, priority, created_at as "createdAt", processed_at as "processedAt"`,
-            [status, ticketId]
-        );
-        if (result.rows.length === 0) {
-            throw new TicketNotFoundError();
+        try {
+            const result = await pool.query(
+                `UPDATE tickets 
+                 SET status = $1, processed_at = CURRENT_TIMESTAMP
+                 WHERE ticket_id = $2
+                 RETURNING ticket_id as "ticketId", line_number as "lineNumber", email, type, description,
+                           status, priority, created_at as "createdAt", processed_at as "processedAt"`,
+                [status, ticketId]
+            );
+            if (result.rows.length === 0) {
+                throw new TicketNotFoundError();
+            }
+            const row = result.rows[0];
+            return {
+                ...row,
+                createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+                processedAt: row.processedAt instanceof Date ? row.processedAt.toISOString() : row.processedAt,
+            };
+        } catch (error) {
+            if (error instanceof TicketNotFoundError) {
+                throw error;
+            }
+            throw new DatabaseError();
         }
-        const row = result.rows[0];
-        return {
-            ...row,
-            createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
-            processedAt: row.processedAt instanceof Date ? row.processedAt.toISOString() : row.processedAt,
-        };
     }
 }
 
