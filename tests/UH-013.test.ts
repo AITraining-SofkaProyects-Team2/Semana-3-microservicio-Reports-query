@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TicketQueryService } from '../src/services/TicketQueryService';
 import { ITicketRepository } from '../src/repositories/ITicketRepository';
 import { InvalidUuidFormatError } from '../src/errors/InvalidUuidFormatError';
+import { InvalidTicketStatusError } from '../src/errors/InvalidTicketStatusError';
 import type { Ticket, TicketStatus } from '../src/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -560,11 +561,10 @@ describe('TC-013-003 — Validación de estado válido - RECEIVED', () => {
       // Porque espera que "CLOSED" no esté en el dominio permitido
       expect(VALID_STATUSES).not.toContain('CLOSED');
       
-      // El servicio debe lanzar un error cuando se intente usar "CLOSED"
-      // Por ahora esperamos que lance un error de validación
+      // El servicio debe lanzar InvalidTicketStatusError cuando se intente usar "CLOSED"
       await expect(
         service.updateTicketStatus(VALID_UUID, 'CLOSED' as any),
-      ).rejects.toThrow(); // Esperamos cualquier error de validación de estado
+      ).rejects.toThrow(InvalidTicketStatusError);
     });
 
     it('When se invoca updateTicketStatus con "CLOSED", Then no invoca al repositorio', async () => {
@@ -584,10 +584,10 @@ describe('TC-013-003 — Validación de estado válido - RECEIVED', () => {
       // "received" != "RECEIVED" (case-sensitive)
       expect(VALID_STATUSES).not.toContain('received');
       
-      // Esperamos que el servicio lance error
+      // El servicio debe lanzar InvalidTicketStatusError
       await expect(
         service.updateTicketStatus(VALID_UUID, 'received' as any),
-      ).rejects.toThrow();
+      ).rejects.toThrow(InvalidTicketStatusError);
     });
   });
 

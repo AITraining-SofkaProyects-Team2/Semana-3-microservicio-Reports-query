@@ -2,6 +2,7 @@ import { ITicketRepository } from '../repositories/ITicketRepository';
 import { Ticket, TicketFilters, TicketStatus, PaginatedResponse } from '../types';
 import { TicketNotFoundError } from '../errors/TicketNotFoundError';
 import { InvalidUuidFormatError } from '../errors/InvalidUuidFormatError';
+import { InvalidTicketStatusError } from '../errors/InvalidTicketStatusError';
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LINE_NUMBER_REGEX = /^\d{10}$/;
@@ -37,6 +38,10 @@ export class TicketQueryService {
   async updateTicketStatus(ticketId: string, status: TicketStatus): Promise<Ticket> {
     if (!UUID_V4_REGEX.test(ticketId)) {
       throw new InvalidUuidFormatError();
+    }
+    const VALID_STATUSES: TicketStatus[] = ['RECEIVED', 'IN_PROGRESS'];
+    if (!VALID_STATUSES.includes(status)) {
+      throw new InvalidTicketStatusError(status);
     }
     return this.repository.updateStatus(ticketId, status);
   }
