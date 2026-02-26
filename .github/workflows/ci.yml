@@ -31,6 +31,12 @@ jobs:
         run: npm run build
 
       - name: Run unit tests
-        run: npm run test
+        run: npm run test -- --coverage
 
-      # (puedes añadir otros pasos, p.ej. lint, coverage, etc.)
+      - name: Check coverage
+        run: |
+          COVERAGE=$(grep -Po 'All files.*\K\d+(?=%)' coverage/coverage-summary.txt)
+          if [ "$COVERAGE" -lt 70 ]; then
+            echo "Coverage is below 70% ($COVERAGE%)"
+            exit 1
+          fi
