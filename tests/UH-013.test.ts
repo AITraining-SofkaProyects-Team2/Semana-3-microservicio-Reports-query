@@ -5,12 +5,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TicketQueryService } from '../src/services/TicketQueryService';
 import { TicketsController } from '../src/controllers/ticketsController';
+import { TicketRepository } from '../src/repositories/TicketRepository';
 import { ITicketRepository } from '../src/repositories/ITicketRepository';
 import { InvalidUuidFormatError } from '../src/errors/InvalidUuidFormatError';
 import { InvalidTicketStatusError } from '../src/errors/InvalidTicketStatusError';
 import { TicketNotFoundError } from '../src/errors/TicketNotFoundError';
 import type { Request } from 'express';
 import type { Ticket, TicketStatus } from '../src/types';
+
+vi.mock('../src/config/database', () => ({
+  default: { query: vi.fn() },
+}));
+
+import pool from '../src/config/database';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TC-013-001 — Validación de formato de ticketId - UUID válido
@@ -1233,3 +1240,125 @@ describe('TC-013-006 — Error 404: Controlador mapea TicketNotFoundError a HTTP
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-013-007 — Actualización idempotente - mismo estado
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Descripción: Verificar que TicketRepository.updateStatus() maneja
+ * correctamente el caso en que el UPDATE SQL no afecta ninguna fila
+ * (condición de carrera: ticket eliminado entre findById y updateStatus).
+ * En ese caso debe lanzar TicketNotFoundError en lugar de crashear con TypeError.
+ * También verifica el contrato de mapeo cuando el UPDATE sí es exitoso.
+ *
+ * Precondiciones:
+ *   - El pool de base de datos es mockeado con vi.mock
+ *   - Se controla el resultado del query para simular 0 filas vs 1 fila
+ *
+ * Pasos (Gherkin):
+ *   Given el pool de BD está mockeado
+ *     And la query UPDATE retorna 0 filas (ticket no encontrado)
+ *   When se invoca TicketRepository.updateStatus()
+ *   Then lanza TicketNotFoundError
+ *     And no intenta acceder a result.rows[0] (evita TypeError)
+ *
+ * Partición de equivalencia:
+ *   | Grupo                            | rows.length | Resultado Esperado       |
+ *   |----------------------------------|-------------|--------------------------|
+ *   | UPDATE afecta 1 fila             | 1           | Retorna Ticket mapeado   |
+ *   | UPDATE afecta 0 filas            | 0           | TicketNotFoundError      |
+ *
+ * Valores límites:
+ *   - 0 filas afectadas (ticket eliminado en race condition)
+ *   - 1 fila afectada (caso normal)
+ */
+
+describe('TC-013-007 — TicketRepository.updateStatus: manejo de 0 filas en UPDATE', () => {
+  const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
+  const mockQuery = vi.mocked(pool.query);
+  let repository: TicketRepository;
+
+  const DB_ROW = {
+    ticketId: VALID_UUID,
+    lineNumber: '0991234567',
+    email: 'admin@example.com',
+    type: 'NO_SERVICE',
+    description: null,
+    priority: 'HIGH',
+    status: 'IN_PROGRESS',
+    createdAt: new Date('2026-02-25T09:00:00.000Z'),
+    processedAt: new Date('2026-02-25T10:15:00.000Z'),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    repository = new TicketRepository();
+  });
+
+  // ── EP-1: UPDATE afecta 0 filas (race condition) ─────────────────────────
+  describe('Given el UPDATE SQL retorna 0 filas (ticket eliminado en race condition)', () => {
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as any);
+    });
+
+    it('When se invoca updateStatus, Then lanza TicketNotFoundError', async () => {
+      await expect(
+        repository.updateStatus(VALID_UUID, 'IN_PROGRESS'),
+      ).rejects.toThrow(TicketNotFoundError);
+    });
+
+    it('When se invoca updateStatus con 0 filas, Then no lanza TypeError', async () => {
+      try {
+        await repository.updateStatus(VALID_UUID, 'IN_PROGRESS');
+        throw new Error('Debería haber lanzado un error');
+      } catch (error: any) {
+        expect(error instanceof TypeError).toBe(false);
+        expect(error instanceof TicketNotFoundError).toBe(true);
+      }
+    });
+  });
+
+  // ── EP-2: UPDATE afecta 1 fila (caso normal) ─────────────────────────────
+  describe('Given el UPDATE SQL retorna 1 fila (ticket actualizado correctamente)', () => {
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({ rows: [DB_ROW], rowCount: 1 } as any);
+    });
+
+    it('When se invoca updateStatus, Then retorna el ticket mapeado', async () => {
+      const result = await repository.updateStatus(VALID_UUID, 'IN_PROGRESS');
+      expect(result).toBeDefined();
+      expect(result.ticketId).toBe(VALID_UUID);
+    });
+
+    it('When se invoca updateStatus, Then el ticket retornado tiene status "IN_PROGRESS"', async () => {
+      const result = await repository.updateStatus(VALID_UUID, 'IN_PROGRESS');
+      expect(result.status).toBe('IN_PROGRESS');
+    });
+
+    it('When se invoca updateStatus, Then processedAt es una cadena ISO 8601', async () => {
+      const result = await repository.updateStatus(VALID_UUID, 'IN_PROGRESS');
+      expect(typeof result.processedAt).toBe('string');
+      expect(new Date(result.processedAt!).toISOString()).toBe(result.processedAt);
+    });
+
+    it('When se invoca updateStatus, Then pool.query es llamado exactamente una vez', async () => {
+      await repository.updateStatus(VALID_UUID, 'IN_PROGRESS');
+      expect(mockQuery).toHaveBeenCalledOnce();
+    });
+
+    it('When se invoca updateStatus, Then la query SQL incluye CURRENT_TIMESTAMP para processed_at', async () => {
+      await repository.updateStatus(VALID_UUID, 'IN_PROGRESS');
+      const [sqlQuery] = mockQuery.mock.calls[0] as [string, any[]];
+      expect(sqlQuery).toContain('CURRENT_TIMESTAMP');
+    });
+  });
+
+  // ── Valor límite: rows vacío no debe propagarse como TypeError ────────────
+  describe('Valor límite: rows vacío no debe causar TypeError al hacer spread de undefined', () => {
+    it('Then rows[0] === undefined no debe propagarse sin control', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as any);
+      const error = await repository.updateStatus(VALID_UUID, 'RECEIVED').catch(e => e);
+      expect(error).toBeInstanceOf(TicketNotFoundError);
+      expect(error).not.toBeInstanceOf(TypeError);
+    });
+  });
+});
