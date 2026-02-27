@@ -35,8 +35,30 @@ jobs:
 
       - name: Check coverage
         run: |
-          COVERAGE=$(grep -Po 'All files.*\K\d+(?=%)' coverage/coverage-summary.txt)
-          if [ "$COVERAGE" -lt 70 ]; then
-            echo "Coverage is below 70% ($COVERAGE%)"
+          set -euo pipefail
+          # Prefer JSON summary produced by vitest/coverage reporter
+          if [ -f coverage/coverage-summary.json ]; then
+            echo "Found coverage/coverage-summary.json, extracting percentage..."
+            COVERAGE=$(node -e "const fs=require('fs');const p='coverage/coverage-summary.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));const pct=(j.total && (j.total.lines||j.total.statements||j.total))?((j.total.lines&&j.total.lines.pct)?j.total.lines.pct:((j.total.statements&&j.total.statements.pct)?j.total.statements.pct:(j.total.pct||0))):0;console.log(Math.round(pct));")
+          elif [ -f coverage/coverage-summary.txt ]; then
+            echo "Falling back to coverage/coverage-summary.txt"
+            COVERAGE=$(grep -Po 'All files.*\\K\d+(?=%)' coverage/coverage-summary.txt || true)
+          else
+            echo "No coverage summary found. Attempting to parse vitest output file if present..."
+            if [ -f coverage/coverage-summary.txt ]; then
+              COVERAGE=$(grep -Po 'All files.*\\K\d+(?=%)' coverage/coverage-summary.txt || true)
+            else
+              echo "Coverage summary files not found (coverage/coverage-summary.json or coverage/coverage-summary.txt)."
+              exit 1
+            fi
+          fi
+
+          echo "Coverage detected: ${COVERAGE}%"
+          if [ -z "${COVERAGE}" ]; then
+            echo "Could not determine coverage percentage." >&2
+            exit 1
+          fi
+          if [ "${COVERAGE}" -lt 70 ]; then
+            echo "Coverage is below 70% (${COVERAGE}%)"
             exit 1
           fi
