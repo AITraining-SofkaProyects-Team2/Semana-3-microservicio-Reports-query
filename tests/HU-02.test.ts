@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TicketQueryService } from '../src/services/TicketQueryService';
 import { ITicketRepository } from '../src/repositories/ITicketRepository';
 import type { Ticket, PaginatedResponse } from '../src/types';
+import request from 'supertest';
+import { createApp } from '../src/index';
+
+vi.mock('../src/config/database', () => ({
+  default: { query: vi.fn() },
+}));
+import pool from '../src/config/database';
 
 /**
  * HU-02: Filtro por estado
@@ -162,6 +169,25 @@ describe('HU-02 — Filtro por estado', () => {
       expect(result.data).toHaveLength(2);
       const statuses = new Set(result.data.map(t => t.status));
       expect(statuses.has('RECEIVED') || statuses.has('IN_PROGRESS')).toBe(true);
+    });
+
+    it('Integration: GET /api/tickets?status=RECEIVED retorna solo RECEIVED via controller', async () => {
+      const tickets = [
+        makeTicket('1', 'RECEIVED', 'HIGH'),
+        makeTicket('3', 'RECEIVED', 'LOW'),
+      ];
+      // data query
+      (pool.query as any).mockResolvedValueOnce({ rows: tickets.map(t => ({ ...t })) });
+      // count query
+      (pool.query as any).mockResolvedValueOnce({ rows: [{ count: '2' }] });
+
+      const app = createApp();
+      const res = await request(app).get('/api/tickets?status=RECEIVED').expect(200);
+
+      expect(res.body).toHaveProperty('data');
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.every((t: any) => t.status === 'RECEIVED')).toBe(true);
+      expect(res.body.pagination.totalItems).toBe(2);
     });
 
     it('Valores límites: Todos los tickets coinciden con el filtro', async () => {

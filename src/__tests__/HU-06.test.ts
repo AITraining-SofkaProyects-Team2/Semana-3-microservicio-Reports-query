@@ -8,6 +8,13 @@ import { ITicketRepository } from '../repositories/ITicketRepository';
 import type { Ticket } from '../types';
 import { TicketNotFoundError } from '../errors/TicketNotFoundError';
 import { InvalidUuidFormatError } from '../errors/InvalidUuidFormatError';
+import request from 'supertest';
+import { createApp } from '../index';
+
+vi.mock('../config/database', () => ({
+  default: { query: vi.fn() },
+}));
+import pool from '../config/database';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TC-028 — Buscar por ID de ticket existente
@@ -88,6 +95,18 @@ describe('TC-028 — Buscar por ID de ticket existente', () => {
     it('When se solicita findById, Then el servicio NO lanza excepción para un UUID existente', async () => {
       // Then — no debe rechazar
       await expect(service.findById(EXISTING_UUID)).resolves.not.toThrow();
+    });
+
+    it('Integration: GET /api/tickets/:ticketId retorna ticket via controller', async () => {
+      const row = { ...existingTicket };
+      (pool.query as any).mockResolvedValueOnce({ rows: [row] });
+
+      const app = createApp();
+      const res = await request(app).get(`/api/tickets/${EXISTING_UUID}`).expect(200);
+
+      expect(res.body).toHaveProperty('ticketId', EXISTING_UUID);
+      expect(res.body).toHaveProperty('lineNumber');
+      expect(res.body).toHaveProperty('status');
     });
   });
 });

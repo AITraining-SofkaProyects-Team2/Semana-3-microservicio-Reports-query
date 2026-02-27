@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TicketQueryService } from '../src/services/TicketQueryService';
 import { ITicketRepository } from '../src/repositories/ITicketRepository';
 import type { Ticket, PaginatedResponse } from '../src/types';
+import request from 'supertest';
+import { createApp } from '../src/index';
+
+// Mockear pool para tests de integración que pasan por TicketRepository
+vi.mock('../src/config/database', () => ({
+  default: { query: vi.fn() },
+}));
+import pool from '../src/config/database';
 
 /**
  * HU-01: Listado de tickets con paginación
@@ -147,6 +155,27 @@ describe('HU-01 — Listado de tickets con paginación', () => {
       expect(mockRepository.findAll).toHaveBeenCalledWith({});
       expect(result.pagination.page).toBe(1);
       expect(result.pagination.pageSize).toBe(20);
+    });
+
+    it('Integration: GET /api/tickets returns paginated response via controller', async () => {
+      // preparar datos que TicketRepository espera (dataQuery then countQuery)
+      const tickets = Array.from({ length: 5 }, (_, i) => makeTicket(`uuid-int-${i}`, i));
+      // data query result
+      (pool.query as any).mockResolvedValueOnce({ rows: tickets.map(t => ({
+        ...t,
+        createdAt: t.createdAt,
+        processedAt: t.processedAt,
+      })) });
+      // count query result
+      (pool.query as any).mockResolvedValueOnce({ rows: [{ count: '5' }] });
+
+      const app = createApp();
+      const res = await request(app).get('/api/tickets').expect(200);
+
+      expect(res.body).toHaveProperty('data');
+      expect(res.body).toHaveProperty('pagination');
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.pagination).toHaveProperty('totalItems', 5);
     });
   });
 
