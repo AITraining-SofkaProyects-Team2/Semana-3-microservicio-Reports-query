@@ -9,6 +9,5 @@ coverage
 npm-debug.log
 yarn.lock
 .DS_Store
-tests
 test_output.txt
 test_results.txt

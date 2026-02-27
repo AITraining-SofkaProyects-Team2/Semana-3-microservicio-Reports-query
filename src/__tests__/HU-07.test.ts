@@ -6,6 +6,13 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { TicketQueryService } from '../services/TicketQueryService';
 import { ITicketRepository } from '../repositories/ITicketRepository';
 import type { Ticket } from '../types';
+import request from 'supertest';
+import { createApp } from '../index';
+
+vi.mock('../config/database', () => ({
+  default: { query: vi.fn() },
+}));
+import pool from '../config/database';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TC-032 — Buscar por número de línea válido con resultados
@@ -105,6 +112,18 @@ describe('TC-032 — Buscar por número de línea válido con resultados', () =>
           expect(ticket).toHaveProperty(field);
         }
       }
+    });
+
+    it('Integration: GET /api/tickets/line/:lineNumber retorna arreglo via controller', async () => {
+      // Mockear la consulta que TicketRepository hará
+      (pool.query as any).mockResolvedValueOnce({ rows: ticketsForLine.map(t => ({ ...t })) });
+
+      const app = createApp();
+      const res = await request(app).get(`/api/tickets/line/${VALID_LINE_NUMBER}`).expect(200);
+
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data).toHaveLength(3);
+      expect(res.body.data.every((r: any) => r.lineNumber === VALID_LINE_NUMBER)).toBe(true);
     });
 
     // ── Valor límite: longitud exacta de 10 dígitos ───────────────────────────

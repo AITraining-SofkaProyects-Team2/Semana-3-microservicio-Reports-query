@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { TicketQueryService } from '../services/TicketQueryService';
 import { TicketFilters } from '../types';
+import { TicketNotFoundError } from '../errors/TicketNotFoundError';
+import { InvalidUuidFormatError } from '../errors/InvalidUuidFormatError';
+import { InvalidTicketStatusError } from '../errors/InvalidTicketStatusError';
 
 /**
  * Controlador delgado para operaciones de lectura sobre tickets.
@@ -55,5 +58,22 @@ export class TicketsController {
     const { lineNumber } = req.params;
     const tickets = await this.queryService.findByLineNumber(lineNumber);
     res.status(200).json({ data: tickets });
+  }
+
+  async updateTicketStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const { ticketId } = req.params;
+      const { status } = req.body;
+      const result = await this.queryService.updateTicketStatus(ticketId, status);
+      res.status(200).json(result);
+    } catch (error) {
+      if (error instanceof TicketNotFoundError) {
+        res.status(404).json({ error: error.message });
+      } else if (error instanceof InvalidUuidFormatError || error instanceof InvalidTicketStatusError) {
+        res.status(400).json({ error: (error as Error).message });
+      } else {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    }
   }
 }

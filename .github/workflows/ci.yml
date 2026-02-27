@@ -35,8 +35,11 @@ jobs:
 
       - name: Check coverage
         run: |
-          COVERAGE=$(grep -Po 'All files.*\K\d+(?=%)' coverage/coverage-summary.txt)
-          if [ "$COVERAGE" -lt 70 ]; then
+          COVERAGE=$(jq '.total.lines.pct' coverage/coverage-summary.json)
+
+          echo "Coverage is $COVERAGE%"
+
+          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
             echo "Coverage is below 70% ($COVERAGE%)"
             exit 1
           fi
