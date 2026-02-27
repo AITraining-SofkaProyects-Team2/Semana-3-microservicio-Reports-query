@@ -22,27 +22,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm install
 
-      - name: Run tests and collect coverage
-        # Reemplaza 'npm run coverage' con tu comando específico si es diferente
-        run: npm run coverage 
-      
-      # Opcional: Publicar el reporte a un servicio externo (como Codecov o Coveralls)
-      # Requerirá configurar secretos en tu repositorio de GitHub
-      - name: Upload coverage to Codecov
-        uses: [codecov/codecov-action@v4](https://github.com)
+      - name: Build project
+        run: npm run build
+
+      - name: Run unit tests and save coverage summary
+        run: npm test -- --coverageReporters=lcov # Command to run tests and generate lcov file
+
+      - name: Check minimum coverage percentage
+        uses: devmasx/coverage-check-action@v1.2.0 # Action to check the coverage
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          # Otras opciones según tu configuración
-          
-      # Opcional: Usar una acción del Marketplace para comentar el PR con el resumen de cobertura
-      - name: Report coverage in PR comment
-        if: github.event_name == 'pull_request'
-        uses: [actions/coverage-report@v2](https://github.com/marketplace/actions/node-coverage-report)
-        with:
-          # La acción intentará leer el output de istanbuljs/nyc
-          # Asegúrate de que tu script genera un formato compatible (json-summary o text-summary)
-          # Puedes consultar la documentación de la acción específica que elijas en GitHub Marketplace
+          type: lcov
+          result_path: coverage/lcov.info # Path to your coverage report file
+          min_coverage: 70 # The minimum coverage required (e.g., 80%)
+          token: ${{ secrets.GITHUB_TOKEN }} # Use the built-in GITHUB_TOKEN
