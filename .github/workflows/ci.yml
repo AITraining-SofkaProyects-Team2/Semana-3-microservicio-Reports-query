@@ -11,8 +11,10 @@ on:
       - develop
 
 jobs:
-  test:
+  run-tests:
     runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.set-coverage.outputs.coverage }}
 
     steps:
       - name: Checkout code
@@ -33,9 +35,26 @@ jobs:
       - name: Run unit tests and save coverage summary
         run: mkdir -p coverage && npm run test 2>&1 | tee coverage/coverage-summary.txt
 
-      - name: Check coverage
+      - name: Debug: list coverage directory
+        if: always()
+        run: |
+          echo 'Contents of coverage/:'
+          ls -la coverage || true
+          echo 'Find JSON files under coverage/:'
+          find coverage -type f -name '*.json' -print || true
+
+      - name: Upload coverage as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-artifact
+          path: coverage
+
+      - id: set-coverage
+        name: Determine coverage and set output
         run: |
           set -euo pipefail
+          COVERAGE=0
           # Prefer JSON summary produced by vitest/coverage reporter
           if [ -f coverage/coverage-summary.json ]; then
             echo "Found coverage/coverage-summary.json, extracting percentage..."
@@ -44,18 +63,35 @@ jobs:
             echo "Falling back to coverage/coverage-summary.txt"
             COVERAGE=$(grep -Po 'All files.*\\K\d+(?=%)' coverage/coverage-summary.txt || true)
           else
-            echo "No coverage summary found. Attempting to parse vitest output file if present..."
-            if [ -f coverage/coverage-summary.txt ]; then
-              COVERAGE=$(grep -Po 'All files.*\\K\d+(?=%)' coverage/coverage-summary.txt || true)
-            else
-              echo "Coverage summary files not found (coverage/coverage-summary.json or coverage/coverage-summary.txt)."
-              exit 1
-            fi
+            echo "Coverage summary files not found (coverage/coverage-summary.json or coverage/coverage-summary.txt). Trying to grep the text file anyway..."
+            COVERAGE=$(grep -Po 'All files.*\\K\d+(?=%)' coverage/coverage-summary.txt || true)
           fi
 
           echo "Coverage detected: ${COVERAGE}%"
           if [ -z "${COVERAGE}" ]; then
             echo "Could not determine coverage percentage." >&2
+            exit 1
+          fi
+          echo "coverage=${COVERAGE}" >> $GITHUB_OUTPUT
+
+  check-coverage:
+    runs-on: ubuntu-latest
+    needs: run-tests
+
+    steps:
+      - name: Checkout (for workspace)
+        uses: actions/checkout@v3
+
+      - name: Print coverage from previous job
+        run: |
+          echo "Coverage from tests job: ${{ needs.run-tests.outputs.coverage }}%"
+
+      - name: Fail if coverage below threshold
+        run: |
+          set -euo pipefail
+          COVERAGE=${{ needs.run-tests.outputs.coverage }}
+          if [ -z "${COVERAGE}" ]; then
+            echo "No coverage value received from tests job" >&2
             exit 1
           fi
           if [ "${COVERAGE}" -lt 70 ]; then
