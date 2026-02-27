@@ -38,6 +38,119 @@ describe('HU-01 — Listado de tickets con paginación', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // HU01-TC-001 — Listado paginado de tickets retorna 200
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('HU01-TC-001 — Listado paginado de tickets retorna 200', () => {
+    it('Given el endpoint GET /api/tickets está disponible, And existen múltiples tickets en la base de datos, When se envía una request GET /api/tickets sin filtros, Then retorna objeto con estructura correcta (data y pagination)', async () => {
+      // Given: Preparar múltiples tickets (simular base de datos poblada)
+      const tickets = Array.from({ length: 25 }, (_, i) => makeTicket(`uuid-${i}`, i));
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: tickets.slice(0, 20),
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 25,
+            totalPages: 2,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      // When: Enviar request sin filtros (valores por defecto)
+      const result = await service.getTickets({});
+
+      // Then: Verificar que la respuesta tiene estructura correcta
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('pagination');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data).toHaveLength(20);
+    });
+
+    it('Then el body contiene propiedad "data" con array de tickets', async () => {
+      const tickets = Array.from({ length: 5 }, (_, i) => makeTicket(`uuid-${i}`, i));
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: tickets,
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 5,
+            totalPages: 1,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      const result = await service.getTickets({});
+
+      expect(result.data).toBeDefined();
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.every((ticket) => ticket.ticketId)).toBe(true);
+    });
+
+    it('Then el body contiene propiedad "pagination" con metadatos correctos (page, pageSize, totalItems, totalPages)', async () => {
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: Array.from({ length: 20 }, (_, i) => makeTicket(`uuid-${i}`, i)),
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 100,
+            totalPages: 5,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      const result = await service.getTickets({});
+
+      expect(result.pagination).toBeDefined();
+      expect(result.pagination).toHaveProperty('page', 1);
+      expect(result.pagination).toHaveProperty('pageSize', 20);
+      expect(result.pagination).toHaveProperty('totalItems', 100);
+      expect(result.pagination).toHaveProperty('totalPages', 5);
+    });
+
+    it('Partición de equivalencia: Sin parámetros retorna estructura válida', async () => {
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: Array.from({ length: 20 }, (_, i) => makeTicket(`uuid-${i}`, i)),
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 50,
+            totalPages: 3,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      const result = await service.getTickets({});
+
+      expect(result.data.length).toBeGreaterThan(0);
+      expect(result.pagination.page).toBeGreaterThanOrEqual(1);
+      expect(result.pagination.totalPages).toBeGreaterThanOrEqual(1);
+    });
+
+    it('Valores límites: Request sin parámetros retorna paginación con defaults (page=1, pageSize=20)', async () => {
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: Array.from({ length: 20 }, (_, i) => makeTicket(`uuid-${i}`, i)),
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 20,
+            totalPages: 1,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      const result = await service.getTickets({});
+
+      expect(mockRepository.findAll).toHaveBeenCalledWith({});
+      expect(result.pagination.page).toBe(1);
+      expect(result.pagination.pageSize).toBe(20);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // TC-001 — Listado paginado con tamaño por defecto
   // ─────────────────────────────────────────────────────────────────────────────
   describe('TC-001 — Listado paginado con tamaño por defecto', () => {
