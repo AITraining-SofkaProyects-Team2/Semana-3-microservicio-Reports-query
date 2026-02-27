@@ -36,6 +36,156 @@ describe('HU-02 — Filtro por estado', () => {
     service = new TicketQueryService(mockRepository);
   });
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // HU02-TC-001 — Filtro por estado retorna tickets filtrados
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('HU02-TC-001 — Filtro por estado retorna tickets filtrados', () => {
+    it('Given existen tickets con estados RECEIVED e IN_PROGRESS, When se envía GET /api/tickets?status=RECEIVED, Then el código de respuesta es 200 (simulado) y el array "data" contiene solo tickets con status = "RECEIVED"', async () => {
+      // Given: Preparar tickets con diferentes estados
+      const tickets = [
+        makeTicket('1', 'RECEIVED', 'HIGH'),
+        makeTicket('2', 'IN_PROGRESS', 'MEDIUM'),
+        makeTicket('3', 'RECEIVED', 'LOW'),
+        makeTicket('4', 'IN_PROGRESS', 'HIGH'),
+      ];
+
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: tickets.filter(t => t.status === 'RECEIVED'),
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 2,
+            totalPages: 1,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      // When: Solicitar tickets filtrados por status=RECEIVED
+      const result = await service.getTickets({ status: 'RECEIVED' });
+
+      // Then: Verificar que la respuesta contiene solo RECEIVED
+      expect(result.data).toBeDefined();
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data).toHaveLength(2);
+    });
+
+    it('Then el array "data" contiene solo tickets con status = "RECEIVED"', async () => {
+      const tickets = [
+        makeTicket('1', 'RECEIVED', 'HIGH'),
+        makeTicket('2', 'IN_PROGRESS', 'MEDIUM'),
+        makeTicket('3', 'RECEIVED', 'LOW'),
+      ];
+
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: tickets.filter(t => t.status === 'RECEIVED'),
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 2,
+            totalPages: 1,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      const result = await service.getTickets({ status: 'RECEIVED' });
+
+      result.data.forEach(ticket => {
+        expect(ticket.status).toBe('RECEIVED');
+      });
+      expect(result.data.every(t => t.status === 'RECEIVED')).toBe(true);
+    });
+
+    it('Partición de equivalencia: Status RECEIVED válido', async () => {
+      const tickets = [makeTicket('1', 'RECEIVED', 'HIGH'), makeTicket('2', 'RECEIVED', 'LOW')];
+
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: tickets,
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 2,
+            totalPages: 1,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      const result = await service.getTickets({ status: 'RECEIVED' });
+
+      expect(result.data.length).toBeGreaterThan(0);
+      expect(result.data.every(t => t.status === 'RECEIVED')).toBe(true);
+    });
+
+    it('Partición de equivalencia: Status IN_PROGRESS válido', async () => {
+      const tickets = [makeTicket('1', 'IN_PROGRESS', 'HIGH')];
+
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: tickets,
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 1,
+            totalPages: 1,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      const result = await service.getTickets({ status: 'IN_PROGRESS' });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].status).toBe('IN_PROGRESS');
+    });
+
+    it('Partición de equivalencia: Múltiples estados (RECEIVED,IN_PROGRESS)', async () => {
+      const tickets = [
+        makeTicket('1', 'RECEIVED', 'HIGH'),
+        makeTicket('2', 'IN_PROGRESS', 'MEDIUM'),
+      ];
+
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: tickets,
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 2,
+            totalPages: 1,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      const result = await service.getTickets({ status: ['RECEIVED', 'IN_PROGRESS'] });
+
+      expect(result.data).toHaveLength(2);
+      const statuses = new Set(result.data.map(t => t.status));
+      expect(statuses.has('RECEIVED') || statuses.has('IN_PROGRESS')).toBe(true);
+    });
+
+    it('Valores límites: Todos los tickets coinciden con el filtro', async () => {
+      const tickets = Array.from({ length: 20 }, (_, i) => makeTicket(String(i), 'RECEIVED', 'HIGH'));
+
+      mockRepository.findAll = vi
+        .fn()
+        .mockResolvedValue({
+          data: tickets,
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 20,
+            totalPages: 1,
+          },
+        } as PaginatedResponse<Ticket>);
+
+      const result = await service.getTickets({ status: 'RECEIVED' });
+
+      expect(result.data).toHaveLength(20);
+      expect(result.data.every(t => t.status === 'RECEIVED')).toBe(true);
+    });
+  });
+
   // TC-008 — Filtrar por un solo estado válido
   describe('TC-008 — Filtrar por un solo estado válido', () => {
     it('Given existen tickets con diferentes estados, When se solicita RECEIVED, Then retorna solo RECEIVED', async () => {
