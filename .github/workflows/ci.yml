@@ -16,27 +16,27 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build project
         run: npm run build
 
-      - name: Run unit tests and save coverage summary
-        run: npm test -- --coverageReporters=lcov # Command to run tests and generate lcov file
+      - name: Run unit tests
+        run: npm run test
 
-      - name: Check minimum coverage percentage
-        uses: devmasx/coverage-check-action@v1.2.0 # Action to check the coverage
-        with:
-          type: lcov
-          result_path: coverage/lcov.info # Path to your coverage report file
-          min_coverage: 70 # The minimum coverage required (e.g., 80%)
-          token: ${{ secrets.GITHUB_TOKEN }} # Use the built-in GITHUB_TOKEN
+      - name: Check coverage
+        run: |
+          COVERAGE=$(grep -Po 'All files.*\K\d+(?=%)' coverage/coverage-summary.txt)
+          if [ "$COVERAGE" -lt 70 ]; then
+            echo "Coverage is below 70% ($COVERAGE%)"
+            exit 1
+          fi
