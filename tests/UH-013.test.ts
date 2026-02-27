@@ -1561,7 +1561,7 @@ describe('TC-013-009 — Request PATCH completa con body válido retorna 200 (In
   };
 
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks(); // resetAllMocks limpia también la cola de mockResolvedValueOnce
   });
 
   // ── EP-1: Transición RECEIVED → IN_PROGRESS ─────────────────────────────
@@ -1716,6 +1716,235 @@ describe('TC-013-009 — Request PATCH completa con body válido retorna 200 (In
         .send({ status: 'IN_PROGRESS', extraField: 'ignored', anotherExtra: 123 });
 
       expect(response.status).toBe(200);
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-013-010 — Request PATCH con body inválido retorna 400
+//              (Integración de componentes)
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Descripción: Verificar que la request PATCH retorna HTTP 400 cuando el body
+ * contiene datos inválidos (UUID incorrecto, estado fuera del dominio, sin status,
+ * etc.), integrando el pipeline completo router → controller → service.
+ *
+ * Tipo: Integración de componentes (sin base de datos real, sin servicios externos).
+ *
+ * Precondiciones:
+ *   - La aplicación Express se instancia con createApp().
+ *   - pool.query está mockeado: no hay conexión real a PostgreSQL.
+ *   - El endpoint PATCH /api/tickets/:ticketId/status está registrado.
+ *
+ * Pasos (Gherkin):
+ *   Given el endpoint PATCH /api/tickets/:ticketId/status está disponible
+ *   When se envía una request HTTP PATCH con datos inválidos
+ *     (UUID malformado, status fuera del dominio, body vacío, etc.)
+ *   Then el código de respuesta HTTP es 400
+ *     And el body de la respuesta contiene un campo "error" con descripción
+ *
+ * Partición de equivalencia:
+ *   | Grupo                           | Input                              | HTTP Esperado |
+ *   |---------------------------------|------------------------------------|---------------|
+ *   | EP-1: UUID inválido             | ticketId = "invalid-uuid-format"   | 400           |
+ *   | EP-1: UUID muy corto            | ticketId = "abc123"                | 400           |
+ *   | EP-1: UUID sin guiones          | ticketId = "550e8400e29b41d4..."   | 400           |
+ *   | EP-2: Status fuera de dominio   | status = "CLOSED"                  | 400           |
+ *   | EP-2: Status inexistente        | status = "RESOLVED"                | 400           |
+ *   | EP-2: Status inexistente        | status = "CANCELLED"               | 400           |
+ *   | EP-3: Body sin campo status     | {}                                 | 400           |
+ *   | EP-3: Body completamente vacío  | sin body                           | 400           |
+ *   | EP-4: Ticket no encontrado      | UUID válido pero ticket inexistente| 404           |
+ *
+ * Valores límites:
+ *   - status en minúsculas: "received" (case-sensitive → inválido)
+ *   - status con typo: "RECEIVEDD", "IN_PROGRES"
+ *   - status con espacio: " IN_PROGRESS "
+ *
+ * Tabla de Decisión:
+ *   | # | UUID válido | Status válido | Ticket existe | HTTP Esperado |
+ *   |---|-------------|---------------|---------------|---------------|
+ *   | 1 | ✗           | -             | -             | 400           |
+ *   | 2 | ✓           | ✗             | ✓             | 400           |
+ *   | 3 | ✓           | -             | ✗             | 404           |
+ *   | 4 | ✓           | ✓             | ✓             | 200 (TC-009)  |
+ */
+describe('TC-013-010 — Request PATCH con body inválido retorna 400 (Integración)', () => {
+  const VALID_UUID    = '550e8400-e29b-41d4-a716-446655440000';
+  const mockQuery     = vi.mocked(pool.query);
+
+  const BASE_ROW = {
+    ticketId:    VALID_UUID,
+    lineNumber:  '0991234567',
+    email:       'admin@example.com',
+    type:        'NO_SERVICE',
+    description: null,
+    priority:    'HIGH',
+    status:      'RECEIVED',
+    createdAt:   '2026-02-01T00:00:00.000Z',
+    processedAt: '2026-02-01T01:00:00.000Z',
+  };
+
+  afterEach(() => {
+    vi.resetAllMocks(); // resetAllMocks limpia también la cola de mockResolvedValueOnce
+  });
+
+  // ── EP-1: UUID inválido → 400 (no necesita mock de BD) ──────────────────
+  describe('EP-1: Given un ticketId con formato inválido en la URL', () => {
+    it('When ticketId = "invalid-uuid-format", Then retorna HTTP 400', async () => {
+      const response = await request(createApp())
+        .patch('/api/tickets/invalid-uuid-format/status')
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('When ticketId = "invalid-uuid-format", Then la respuesta contiene campo "error"', async () => {
+      const response = await request(createApp())
+        .patch('/api/tickets/invalid-uuid-format/status')
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.body).toHaveProperty('error');
+    });
+
+    it('When ticketId = "abc123" (muy corto), Then retorna HTTP 400', async () => {
+      const response = await request(createApp())
+        .patch('/api/tickets/abc123/status')
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('When ticketId sin guiones "550e8400e29b41d4a716446655440000", Then retorna HTTP 400', async () => {
+      const response = await request(createApp())
+        .patch('/api/tickets/550e8400e29b41d4a716446655440000/status')
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.status).toBe(400);
+    });
+  });
+
+  // ── EP-2: Status fuera del dominio con UUID válido → 400 ────────────────
+  describe('EP-2: Given un UUID válido y un status fuera del dominio en el body', () => {
+    beforeEach(() => {
+      // findById: el servicio valida existencia antes de validar el status
+      mockQuery.mockResolvedValueOnce({ rows: [BASE_ROW], rowCount: 1 } as any);
+    });
+
+    it('When status = "CLOSED", Then retorna HTTP 400', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'CLOSED' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('When status = "CLOSED", Then la respuesta contiene campo "error"', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'CLOSED' });
+
+      expect(response.body).toHaveProperty('error');
+    });
+
+    it('When status = "RESOLVED", Then retorna HTTP 400', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'RESOLVED' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('When status = "CANCELLED", Then retorna HTTP 400', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'CANCELLED' });
+
+      expect(response.status).toBe(400);
+    });
+  });
+
+  // ── EP-3: Body sin campo status → 400 ───────────────────────────────────
+  describe('EP-3: Given un UUID válido y body sin campo status', () => {
+    beforeEach(() => {
+      // findById se llama antes de validar status
+      mockQuery.mockResolvedValueOnce({ rows: [BASE_ROW], rowCount: 1 } as any);
+    });
+
+    it('When body es {} (sin campo status), Then retorna HTTP 400', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({});
+
+      expect(response.status).toBe(400);
+    });
+
+    it('When no se envía body, Then retorna HTTP 400', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`);
+
+      expect(response.status).toBe(400);
+    });
+  });
+
+  // ── EP-4 (Tabla decisión fila 3): Ticket no encontrado → 404 ────────────
+  describe('EP-4: Given un UUID válido pero ticket inexistente', () => {
+    beforeEach(() => {
+      // findById retorna null → TicketNotFoundError
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 } as any);
+    });
+
+    it('When el ticket no existe en BD, Then retorna HTTP 404', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  // ── Valor límite: status en minúsculas (case-sensitive) ─────────────────
+  describe('Valor límite: status en minúsculas debe ser rechazado', () => {
+    beforeEach(() => {
+      mockQuery.mockResolvedValueOnce({ rows: [BASE_ROW], rowCount: 1 } as any);
+    });
+
+    it('When status = "received" (minúsculas), Then retorna HTTP 400', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'received' });
+
+      expect(response.status).toBe(400);
+    });
+  });
+
+  // ── Valor límite: status con typo (un carácter extra/faltante) ───────────
+  describe('Valor límite: status con typo de un carácter', () => {
+    it('When status = "RECEIVEDD" (un carácter extra), Then retorna HTTP 400', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [BASE_ROW], rowCount: 1 } as any);
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'RECEIVEDD' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('When status = "IN_PROGRES" (un carácter faltante), Then retorna HTTP 400', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [BASE_ROW], rowCount: 1 } as any);
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'IN_PROGRES' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('When status = " IN_PROGRESS " (con espacios), Then retorna HTTP 400', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [BASE_ROW], rowCount: 1 } as any);
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: ' IN_PROGRESS ' });
+
+      expect(response.status).toBe(400);
     });
   });
 });
