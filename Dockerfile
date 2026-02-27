@@ -14,6 +14,9 @@ RUN npm install
 COPY tsconfig.json vitest.config.ts ./
 COPY src ./src
 
+# Run all unit tests (both src/__tests__ and tests/)
+RUN npm test -- src/__tests__ tests
+
 EXPOSE 4000
 
 ENTRYPOINT ["entrypoint.sh"]

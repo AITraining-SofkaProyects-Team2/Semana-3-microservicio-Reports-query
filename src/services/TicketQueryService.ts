@@ -1,7 +1,8 @@
 import { ITicketRepository } from '../repositories/ITicketRepository';
-import { Ticket, TicketFilters, PaginatedResponse, VALID_STATUSES, VALID_INCIDENT_TYPES } from '../types';
+import { Ticket, TicketFilters, TicketStatus, PaginatedResponse, VALID_STATUSES, VALID_INCIDENT_TYPES } from '../types';
 import { TicketNotFoundError } from '../errors/TicketNotFoundError';
 import { InvalidUuidFormatError } from '../errors/InvalidUuidFormatError';
+import { InvalidTicketStatusError } from '../errors/InvalidTicketStatusError';
 import { ValidationError } from '../errors/ValidationError';
 import { VALID_PRIORITIES } from '../utils/priorityUtils';
 import { ALLOWED_SORT_FIELDS } from '../types/allowedSortFields';
@@ -42,6 +43,23 @@ export class TicketQueryService {
     return this.repository.findByLineNumber(lineNumber);
   }
 
+  async updateTicketStatus(ticketId: string, status: TicketStatus): Promise<Ticket> {
+    if (!UUID_V4_REGEX.test(ticketId)) {
+      throw new InvalidUuidFormatError();
+    }
+    
+    // Validar que el ticket existe antes de actualizar
+    const ticket = await this.repository.findById(ticketId);
+    if (ticket === null) {
+      throw new TicketNotFoundError();
+    }
+    
+    const VALID_STATUSES: TicketStatus[] = ['RECEIVED', 'IN_PROGRESS'];
+    if (!VALID_STATUSES.includes(status)) {
+      throw new InvalidTicketStatusError(status);
+    }
+    return this.repository.updateStatus(ticketId, status);
+  }
   // ─────────────────────────────────────────────────────────────────────────
   // Validación exhaustiva de filtros de consulta
   // Cada parámetro inválido produce HTTP 400 con mensaje descriptivo.
