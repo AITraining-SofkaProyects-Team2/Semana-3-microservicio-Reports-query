@@ -1,0 +1,14 @@
+node_modules
+dist
+.vscode
+.env
+.env.*
+coverage
+.git
+.gitignore
+npm-debug.log
+yarn.lock
+.DS_Store
+tests
+test_output.txt
+test_results.txt

@@ -2,6 +2,7 @@ import express from 'express';
 import { MetricsService, IncidentRepository } from './services/metricsService';
 import { TicketRepository } from './repositories/TicketRepository';
 import ticketRoutes from './routes/tickets.routes';
+import { errorHandler } from './middlewares/errorHandler';
 
 /**
  * Crea la aplicación Express con las rutas configuradas
@@ -46,25 +47,61 @@ if (process.env.NODE_ENV === 'test') {
   app.post('/__test__/clear', (_req, res) => res.status(204).end());
 }
 
-app.use('/api/tickets', ticketRoutes);
-
   // Instanciar servicio de métricas con el repositorio
   const metricsService = new MetricsService(repo);
 
-  // Rutas de salud
+  // ────────────────────────────────────────────────────────────────────────────
+  // Rutas con path fijo ANTES del router de tickets
+  // (para evitar que /:ticketId capture "/metrics" o "/health")
+  // ────────────────────────────────────────────────────────────────────────────
+
+  // GET /health — Health check
   app.get('/health', (_req, res) => {
     res.status(200).json({ status: 'ok' });
   });
 
-  // Ruta de métricas agregadas
-  app.get('/api/tickets/metrics', async (_req, res) => {
+  // GET /api/tickets/metrics — Métricas agregadas
+  app.get('/api/tickets/metrics', async (_req, res, next) => {
     try {
       const metrics = await metricsService.getMetrics();
       res.status(200).json(metrics);
     } catch (error) {
-      res.status(500).json({ error: 'Internal server error' });
+      next(error);
     }
   });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Router de tickets (GET /, GET /line/:lineNumber, GET /:ticketId)
+  // ────────────────────────────────────────────────────────────────────────────
+  app.use('/api/tickets', ticketRoutes);
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // 405 Method Not Allowed para métodos no-GET en rutas /api/*
+  // (todos los GET válidos ya fueron resueltos arriba;
+  //  cualquier request que llegue aquí con otro verbo es inválido)
+  // ────────────────────────────────────────────────────────────────────────────
+  app.use('/api', (req, res, next) => {
+    if (req.method !== 'GET') {
+      res.status(405)
+        .set('Allow', 'GET')
+        .json({ error: `Método ${req.method} no permitido. Este servicio de consulta solo acepta GET.` });
+      return;
+    }
+    next();
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // 404 Not Found para rutas desconocidas
+  // ────────────────────────────────────────────────────────────────────────────
+  app.use((_req, res) => {
+    res.status(404).json({ error: 'Ruta no encontrada' });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Middleware centralizado de errores (Chain of Responsibility)
+  // DEBE ir al final, después de todas las rutas.
+  // ────────────────────────────────────────────────────────────────────────────
+  app.use(errorHandler);
 
   return app;
 }
