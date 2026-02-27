@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     coverage: {
-      reporter: ['lcov' ,'text', 'json', 'html', 'text-summary'],
+      reporter: ['lcov' ,'text', 'json', 'html', ['text-summary', { file: 'coverage-summary.txt' }]],
       lines: 70,
       functions: 70,
       branches: 70,
