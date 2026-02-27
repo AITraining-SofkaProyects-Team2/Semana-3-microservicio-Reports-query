@@ -2,7 +2,8 @@
 // Como administrador del sistema, necesito cambiar el estado de un ticket desde la
 // vista de listado (transiciones RECEIVED ↔ IN_PROGRESS) mediante un endpoint PATCH.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import request from 'supertest';
 import { TicketQueryService } from '../src/services/TicketQueryService';
 import { TicketsController } from '../src/controllers/ticketsController';
 import { TicketRepository } from '../src/repositories/TicketRepository';
@@ -11,6 +12,7 @@ import { InvalidUuidFormatError } from '../src/errors/InvalidUuidFormatError';
 import { InvalidTicketStatusError } from '../src/errors/InvalidTicketStatusError';
 import { TicketNotFoundError } from '../src/errors/TicketNotFoundError';
 import { DatabaseError } from '../src/errors/DatabaseError';
+import { createApp } from '../src/index';
 import type { Request } from 'express';
 import type { Ticket, TicketStatus } from '../src/types';
 
@@ -1495,6 +1497,225 @@ describe('TC-013-008 — Manejo de errores de base de datos en TicketRepository'
       expect(error instanceof DatabaseError).toBe(true);
       expect(error.message).not.toContain('p4ssw0rd');
       expect(error.message).not.toContain('production-db.internal');
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-013-009 — Request PATCH completa con body válido retorna 200
+//              (Integración de componentes)
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Descripción: Verificar el flujo completo de una request PATCH a través de
+ * la capa HTTP (router → controller → service → repository mocked) cuando el
+ * cuerpo de la request es válido, esperando HTTP 200 con el ticket actualizado.
+ *
+ * Tipo: Integración de componentes (sin base de datos real, sin servicios externos).
+ *
+ * Precondiciones:
+ *   - La aplicación Express se instancia con createApp().
+ *   - pool.query está mockeado: no hay conexión real a PostgreSQL.
+ *   - El endpoint PATCH /api/tickets/:ticketId/status debe estar registrado.
+ *
+ * Pasos (Gherkin):
+ *   Given existe un ticket con ID "550e8400-e29b-41d4-a716-446655440000" en estado "RECEIVED"
+ *     And todos los servicios del Query Service están operativos (mockeados)
+ *   When se envía una request HTTP PATCH a /api/tickets/550e8400-e29b-41d4-a716-446655440000/status
+ *     And el header Content-Type es "application/json"
+ *     And el body es { "status": "IN_PROGRESS" }
+ *   Then el código de respuesta HTTP es 200
+ *     And el header Content-Type de la respuesta contiene "application/json"
+ *     And el body de la respuesta contiene el ticket completo actualizado en formato JSON
+ *     And el campo status del ticket es "IN_PROGRESS"
+ *
+ * Partición de equivalencia:
+ *   | Grupo                    | Componentes de la Request               | Tipo    |
+ *   |--------------------------|-----------------------------------------|---------|
+ *   | Request completa válida  | PATCH + ruta válida + body válido       | Válido  |
+ *   | Transición forward       | RECEIVED → IN_PROGRESS                  | Válido  |
+ *   | Transición backward      | IN_PROGRESS → RECEIVED                  | Válido  |
+ *   | Body con campos extras   | { status, extraField }                  | Válido  |
+ *
+ * Valores límites:
+ *   - Body mínimo válido: { "status": "RECEIVED" }
+ *   - Body con campos adicionales ignorados
+ *   - UUID con todos ceros: "00000000-0000-0000-0000-000000000000" (límite inferior)
+ *   - UUID con todos F's:   "ffffffff-ffff-ffff-ffff-ffffffffffff"  (límite superior)
+ */
+describe('TC-013-009 — Request PATCH completa con body válido retorna 200 (Integración)', () => {
+  const VALID_UUID      = '550e8400-e29b-41d4-a716-446655440000';
+  const UUID_ALL_ZEROS  = '00000000-0000-0000-0000-000000000000';
+  const UUID_ALL_FS     = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+  const mockQuery       = vi.mocked(pool.query);
+
+  const BASE_ROW = {
+    ticketId:    VALID_UUID,
+    lineNumber:  '0991234567',
+    email:       'admin@example.com',
+    type:        'NO_SERVICE',
+    description: null,
+    priority:    'HIGH',
+    status:      'RECEIVED',
+    createdAt:   '2026-02-01T00:00:00.000Z',
+    processedAt: '2026-02-01T01:00:00.000Z',
+  };
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // ── EP-1: Transición RECEIVED → IN_PROGRESS ─────────────────────────────
+  describe('Given un ticket en estado RECEIVED y body con status "IN_PROGRESS"', () => {
+    beforeEach(() => {
+      // findById (servicio valida existencia)
+      mockQuery.mockResolvedValueOnce({ rows: [BASE_ROW], rowCount: 1 } as any);
+      // updateStatus (repositorio actualiza y retorna)
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...BASE_ROW, status: 'IN_PROGRESS', processedAt: '2026-02-26T15:30:45.123Z' }],
+        rowCount: 1,
+      } as any);
+    });
+
+    it('When se envía PATCH con body válido, Then retorna HTTP 200', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('When se envía PATCH con body válido, Then el body de respuesta contiene el ticket', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.body).toBeDefined();
+      expect(response.body.ticketId).toBe(VALID_UUID);
+    });
+
+    it('When se envía PATCH con body válido, Then el campo status en respuesta es "IN_PROGRESS"', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.body.status).toBe('IN_PROGRESS');
+    });
+
+    it('When se envía PATCH con body válido, Then Content-Type de respuesta es application/json', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.headers['content-type']).toMatch(/application\/json/);
+    });
+  });
+
+  // ── EP-2: Transición IN_PROGRESS → RECEIVED ─────────────────────────────
+  describe('Given un ticket en estado IN_PROGRESS y body con status "RECEIVED"', () => {
+    const IN_PROGRESS_ROW = { ...BASE_ROW, status: 'IN_PROGRESS' };
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValueOnce({ rows: [IN_PROGRESS_ROW], rowCount: 1 } as any);
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...IN_PROGRESS_ROW, status: 'RECEIVED', processedAt: '2026-02-26T15:30:45.123Z' }],
+        rowCount: 1,
+      } as any);
+    });
+
+    it('When se envía PATCH con status "RECEIVED", Then retorna HTTP 200', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'RECEIVED' });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('When se envía PATCH con status "RECEIVED", Then el campo status en respuesta es "RECEIVED"', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'RECEIVED' });
+
+      expect(response.body.status).toBe('RECEIVED');
+    });
+  });
+
+  // ── Valor límite: UUID con todos ceros ──────────────────────────────────
+  describe('Valor límite: UUID con todos ceros (límite inferior del dominio UUID)', () => {
+    const ZEROS_ROW = { ...BASE_ROW, ticketId: UUID_ALL_ZEROS };
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValueOnce({ rows: [ZEROS_ROW], rowCount: 1 } as any);
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...ZEROS_ROW, status: 'IN_PROGRESS', processedAt: '2026-02-26T15:30:45.123Z' }],
+        rowCount: 1,
+      } as any);
+    });
+
+    it('When se envía PATCH con UUID "00000000-...-000", Then retorna HTTP 200', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${UUID_ALL_ZEROS}/status`)
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.status).toBe(200);
+    });
+  });
+
+  // ── Valor límite: UUID con todos F's ────────────────────────────────────
+  describe("Valor límite: UUID con todos F's (límite superior del dominio UUID)", () => {
+    const FS_ROW = { ...BASE_ROW, ticketId: UUID_ALL_FS };
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValueOnce({ rows: [FS_ROW], rowCount: 1 } as any);
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...FS_ROW, status: 'IN_PROGRESS', processedAt: '2026-02-26T15:30:45.123Z' }],
+        rowCount: 1,
+      } as any);
+    });
+
+    it("When se envía PATCH con UUID 'ffffffff-...-ffff', Then retorna HTTP 200", async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${UUID_ALL_FS}/status`)
+        .send({ status: 'IN_PROGRESS' });
+
+      expect(response.status).toBe(200);
+    });
+  });
+
+  // ── Valor límite: Body mínimo válido ────────────────────────────────────
+  describe('Valor límite: Body mínimo válido { status: "RECEIVED" }', () => {
+    beforeEach(() => {
+      mockQuery.mockResolvedValueOnce({ rows: [BASE_ROW], rowCount: 1 } as any);
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...BASE_ROW, status: 'RECEIVED', processedAt: '2026-02-26T15:30:45.123Z' }],
+        rowCount: 1,
+      } as any);
+    });
+
+    it('When body contiene únicamente { status: "RECEIVED" }, Then retorna HTTP 200', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'RECEIVED' });
+
+      expect(response.status).toBe(200);
+    });
+  });
+
+  // ── Valor límite: Body tolerante a campos adicionales ───────────────────
+  describe('Valor límite: Body con campos adicionales debe ser tolerado', () => {
+    beforeEach(() => {
+      mockQuery.mockResolvedValueOnce({ rows: [BASE_ROW], rowCount: 1 } as any);
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...BASE_ROW, status: 'IN_PROGRESS', processedAt: '2026-02-26T15:30:45.123Z' }],
+        rowCount: 1,
+      } as any);
+    });
+
+    it('When body incluye campos extra ignorados, Then el sistema retorna HTTP 200', async () => {
+      const response = await request(createApp())
+        .patch(`/api/tickets/${VALID_UUID}/status`)
+        .send({ status: 'IN_PROGRESS', extraField: 'ignored', anotherExtra: 123 });
+
+      expect(response.status).toBe(200);
     });
   });
 });
