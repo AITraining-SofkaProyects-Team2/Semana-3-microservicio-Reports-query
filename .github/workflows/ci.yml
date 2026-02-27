@@ -31,7 +31,7 @@ jobs:
         run: npm run build
 
       - name: Run unit tests and save coverage summary
-        run: mkdir -p coverage && npm run test | tee coverage/coverage-summary.txt
+        run: mkdir -p coverage && npm run test 2>&1 | tee coverage/coverage-summary.txt
 
       - name: Check coverage
         run: |
