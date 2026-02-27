@@ -45,6 +45,119 @@ describe('HU-08 — Ordenamiento de resultados', () => {
     service = new TicketQueryService(mockRepository);
   });
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // HU08-TC-001 — Ordenamiento por fecha ascendente
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('HU08-TC-001 — Ordenamiento por fecha ascendente', () => {
+    it('Given existen múltiples tickets con diferentes fechas de creación, When se solicita ordenamiento por createdAt ascendente, Then retorna tickets ordenados del más antiguo al más reciente', async () => {
+      // Given: Preparar tickets con fechas diferentes
+      const tickets = [
+        makeTicket('T-003', { createdAt: '2026-02-20T10:00:00Z' }),
+        makeTicket('T-001', { createdAt: '2026-02-18T10:00:00Z' }),
+        makeTicket('T-002', { createdAt: '2026-02-15T10:00:00Z' }),
+      ];
+
+      mockRepository.findAll = vi.fn().mockResolvedValue(paginated(tickets.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())));
+
+      // When: Solicitar con ordenamiento ascendente por fecha
+      const result = await service.getTickets({ sortBy: 'createdAt', sortOrder: 'asc' });
+
+      // Then: Verificar que están ordenados de más antiguo a más reciente
+      expect(result.data).toBeDefined();
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeGreaterThan(0);
+    });
+
+    it('Then los tickets están ordenados del más antiguo al más reciente (createdAt ascendente)', async () => {
+      const tickets = [
+        makeTicket('T-003', { createdAt: '2026-02-20T10:00:00Z' }),
+        makeTicket('T-001', { createdAt: '2026-02-18T10:00:00Z' }),
+        makeTicket('T-002', { createdAt: '2026-02-15T10:00:00Z' }),
+      ];
+
+      const sortedTickets = tickets.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+      mockRepository.findAll = vi.fn().mockResolvedValue(paginated(sortedTickets));
+
+      const result = await service.getTickets({ sortBy: 'createdAt', sortOrder: 'asc' });
+
+      // Verificar que las fechas están en orden ascendente
+      const dates = result.data.map(t => new Date(t.createdAt).getTime());
+      for (let i = 0; i < dates.length - 1; i++) {
+        expect(dates[i]).toBeLessThanOrEqual(dates[i + 1]);
+      }
+    });
+
+    it('Partición de equivalencia: Ordenamiento por campo válido "createdAt"', async () => {
+      const tickets = [
+        makeTicket('T-002', { createdAt: '2026-02-15T10:00:00Z' }),
+        makeTicket('T-001', { createdAt: '2026-02-18T10:00:00Z' }),
+      ];
+
+      mockRepository.findAll = vi.fn().mockResolvedValue(paginated(tickets.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())));
+
+      const result = await service.getTickets({ sortBy: 'createdAt', sortOrder: 'asc' });
+
+      expect(result.data).toBeDefined();
+      expect(result.data.every(t => t.createdAt)).toBe(true);
+    });
+
+    it('Partición de equivalencia: Orden válido "asc" (ascendente)', async () => {
+      const tickets = [
+        makeTicket('T-001', { createdAt: '2026-02-15T10:00:00Z' }),
+        makeTicket('T-002', { createdAt: '2026-02-18T10:00:00Z' }),
+      ];
+
+      mockRepository.findAll = vi.fn().mockResolvedValue(paginated(tickets));
+
+      const result = await service.getTickets({ sortBy: 'createdAt', sortOrder: 'asc' });
+
+      const dates = result.data.map(t => new Date(t.createdAt).getTime());
+      for (let i = 0; i < dates.length - 1; i++) {
+        expect(dates[i]).toBeLessThanOrEqual(dates[i + 1]);
+      }
+    });
+
+    it('Valores límites: Mínimo 2 tickets con fechas diferentes', async () => {
+      const tickets = [
+        makeTicket('T-002', { createdAt: '2026-01-01T00:00:00Z' }),
+        makeTicket('T-001', { createdAt: '2026-12-31T23:59:59Z' }),
+      ];
+
+      mockRepository.findAll = vi.fn().mockResolvedValue(paginated(
+        tickets.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      ));
+
+      const result = await service.getTickets({ sortBy: 'createdAt', sortOrder: 'asc' });
+
+      expect(result.data).toHaveLength(2);
+      expect(new Date(result.data[0].createdAt).getTime()).toBeLessThanOrEqual(
+        new Date(result.data[1].createdAt).getTime()
+      );
+    });
+
+    it('Valores límites: Múltiples tickets (10+) ordenados correctamente', async () => {
+      const tickets = Array.from({ length: 10 }, (_, i) => 
+        makeTicket(`T-${String(i).padStart(3, '0')}`, {
+          createdAt: new Date(2026, 0, i + 1).toISOString(),
+        })
+      ).reverse();
+
+      const sortedTickets = [...tickets].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+      mockRepository.findAll = vi.fn().mockResolvedValue(paginated(sortedTickets));
+
+      const result = await service.getTickets({ sortBy: 'createdAt', sortOrder: 'asc' });
+
+      expect(result.data).toHaveLength(10);
+
+      const dates = result.data.map(t => new Date(t.createdAt).getTime());
+      for (let i = 0; i < dates.length - 1; i++) {
+        expect(dates[i]).toBeLessThanOrEqual(dates[i + 1]);
+      }
+    });
+  });
+
   // ── TC-035 — Ordenar por fecha ascendente ─────────────────────────────────
   describe('TC-035 — Ordenar por fecha ascendente (más antiguo primero)', () => {
     it('Given el repositorio devuelve tickets ordenados por createdAt asc, Then el servicio los retorna en ese orden', async () => {
