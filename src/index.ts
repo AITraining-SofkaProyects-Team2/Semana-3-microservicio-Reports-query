@@ -81,9 +81,10 @@ if (process.env.NODE_ENV === 'test') {
   //  cualquier request que llegue aquí con otro verbo es inválido)
   // ────────────────────────────────────────────────────────────────────────────
   app.use('/api', (req, res, next) => {
-    if (req.method !== 'GET') {
+    const isPatchStatus = req.method === 'PATCH' && /^\/tickets\/[^/]+\/status$/.test(req.path);
+    if (req.method !== 'GET' && !isPatchStatus) {
       res.status(405)
-        .set('Allow', 'GET')
+        .set('Allow', 'GET, PATCH')
         .json({ error: `Método ${req.method} no permitido. Este servicio de consulta solo acepta GET.` });
       return;
     }

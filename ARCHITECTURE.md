@@ -75,6 +75,7 @@ Se refactorizaron todos los endpoints del microservicio de consulta para garanti
 | `GET`  | `/api/tickets/metrics`            | inline (`index.ts`, MetricsService)    | Métricas agregadas                 |
 | `GET`  | `/api/tickets/line/:lineNumber`   | `TicketsController.getTicketsByLineNumber` | Búsqueda por número de línea   |
 | `GET`  | `/api/tickets/:ticketId`          | `TicketsController.getTicketById`      | Búsqueda por ID (UUID)            |
+| `PATCH`| `/api/tickets/:ticketId/status`   | `TicketsController.updateTicketStatus` | Actualización de estado del ticket|
 | `POST` | `/__test__/seed`                  | inline (`index.ts`, solo NODE_ENV=test)| Seed de datos de prueba            |
 | `POST` | `/__test__/clear`                 | inline (`index.ts`, solo NODE_ENV=test)| Limpieza de datos de prueba        |
 
@@ -82,10 +83,12 @@ Se refactorizaron todos los endpoints del microservicio de consulta para garanti
 
 | Verbo   | Semántica HTTP                    | Uso en este servicio                           |
 |---------|-----------------------------------|------------------------------------------------|
-| `GET`   | Lectura idempotente, sin efectos secundarios | **Todos los endpoints de dominio** — coherente con CQRS read-side |
+| `GET`   | Lectura idempotente, sin efectos secundarios | **Endpoints de consulta** — coherente con CQRS read-side |
+| `PATCH` | Modificación parcial de un recurso| Actualización de estado (Excepción a la regla de solo lectura) |
 | `POST`  | Creación / acción con efectos secundarios | Solo endpoints de testing (`/__test__/*`) — mutan estado |
 
-> **Principio aplicado:** En un Query Service, el 100% de los endpoints de dominio deben ser `GET`. Las operaciones de escritura pertenecen al Command Service (Producer/Consumer).
+> **Nota sobre CQRS:** Aunque este servicio es primordialmente de consulta, se ha implementado un endpoint `PATCH` para permitir la gestión básica de estados desde el frontend sin requerir un servicio de comandos adicional para esta acción específica en la fase actual.
+
 
 ### 3.3 Orden de declaración de rutas (crítico)
 

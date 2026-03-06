@@ -30,4 +30,7 @@ router.get('/line/:lineNumber', asyncHandler((req, res, next) => controller.getT
 // GET /api/tickets/:ticketId — Búsqueda por ID único (UUID) del ticket
 router.get('/:ticketId', asyncHandler((req, res, next) => controller.getTicketById(req, res)));
 
+// PATCH /api/tickets/:ticketId/status — Actualización de estado de un ticket
+router.patch('/:ticketId/status', asyncHandler((req, res, next) => controller.updateTicketStatus(req, res)));
+
 export default router;
