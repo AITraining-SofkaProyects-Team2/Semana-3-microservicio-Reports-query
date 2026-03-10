@@ -13,6 +13,18 @@ export function createApp(incidentRepository?: IncidentRepository) {
   const app = express();
   app.use(express.json());
 
+  // CORS: permitir orígenes del frontend (ajustable en producción)
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+  });
+
   // Si no se proporciona repositorio, crear uno apropiado según el entorno.
   // En tests usamos un stub in-memory; en ejecución normal usamos `TicketRepository` (Postgres).
   let repo: IncidentRepository;
